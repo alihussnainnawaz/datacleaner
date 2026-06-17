@@ -1,17 +1,11 @@
-fastapi
-uvicorn
-pandas
-numpy
-openpyxl
-xlrd
-python-multipart
-aiofiles
-fuzzywuzzy        
-python-Levenshtein
-rapidfuzz
-python-dotenv# Optional for 1M+ row files: use CSV/Parquet and install polars/pyarrow for a future lazy backend
-# polars
-# pyarrow
-psycopg2-binary
-pymysql
-pyodbc
+fastapi>=0.111.0
+uvicorn[standard]>=0.29.0
+pandas>=2.2.0
+numpy>=1.26.0
+openpyxl>=3.1.0
+xlrd>=2.0.0
+python-multipart>=0.0.9
+aiofiles>=23.2.0
+rapidfuzz>=3.6.0
+fastparquet>=2024.2.0
+python-dotenv>=1.0.0
