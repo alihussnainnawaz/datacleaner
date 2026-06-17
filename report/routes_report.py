@@ -82,7 +82,7 @@ async def get_report_page(
     data_type: str,
     file_id: str,
     ip_name: Optional[str] = None,
-    page_size: int = Query(default=20, ge=1, le=500, description="Rows per page"),
+    page_size: int = Query(default=20, ge=1, le=5000, description="Rows per page"),
     cursor: Optional[str] = Query(default=None, description="Opaque token from a previous page's next_cursor"),
     raw: bool = Query(default=False, description="Return JSON columns as raw strings instead of nested objects"),
 ):
