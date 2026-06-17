@@ -1,9 +1,13 @@
 """
 routes_report.py
 ────────────────
-Cursor-paginated HTTP access to a *_report.parquet file.
+Cursor-paginated HTTP access to a *_report.parquet file, addressed by the
+same (data_type, ip_name, file_id) layout used for storage:
 
-    GET /api/report/{file_id}/page?page_size=20&cursor=<token>&raw=false
+    GET /api/report/{data_type}/{ip_name}/{file_id}/page   (beneficiary / banks / financials)
+    GET /api/report/{data_type}/{file_id}/page             (certificates — no ip_name)
+
+    ?page_size=20&cursor=<token>&raw=false
 
 Pagination contract
 -------------------
@@ -29,7 +33,7 @@ import pandas as pd
 from fastapi import APIRouter, HTTPException, Query
 from fastapi.responses import JSONResponse
 
-from output_writer import OUTPUT_DIR as REPORT_DIR
+from output_writer import resolve_dir, iter_all_outputs, InvalidDataLocation
 from report.pagination import load_report, get_page
 
 router = APIRouter()
@@ -39,14 +43,18 @@ _cache: dict[str, tuple[float, pd.DataFrame]] = {}
 _cache_lock = threading.Lock()
 
 
-def _report_path(file_id: str) -> Path:
+def _report_path(data_type: str, file_id: str, ip_name: Optional[str] = None) -> Path:
     if "/" in file_id or "\\" in file_id or ".." in file_id:
         raise HTTPException(400, "Invalid file_id.")
-    return REPORT_DIR / f"{file_id}_report.parquet"
+    try:
+        folder = resolve_dir(data_type, ip_name, create=False)
+    except InvalidDataLocation as e:
+        raise HTTPException(400, str(e))
+    return folder / f"{file_id}_report.parquet"
 
 
-def _get_sorted_df(file_id: str) -> pd.DataFrame:
-    path = _report_path(file_id)
+def _get_sorted_df(data_type: str, file_id: str, ip_name: Optional[str] = None) -> pd.DataFrame:
+    path = _report_path(data_type, file_id, ip_name)
     if not path.exists():
         raise HTTPException(404, f"No report parquet for file_id '{file_id}'.")
 
@@ -68,39 +76,43 @@ def _get_sorted_df(file_id: str) -> pd.DataFrame:
     return df
 
 
-@router.get("/{file_id}/page", summary="Fetch one cursor-paginated page of the report")
+@router.get("/{data_type}/{ip_name}/{file_id}/page", summary="Fetch one cursor-paginated page (beneficiary / banks / financials)")
+@router.get("/{data_type}/{file_id}/page", summary="Fetch one cursor-paginated page (certificates)")
 async def get_report_page(
+    data_type: str,
     file_id: str,
+    ip_name: Optional[str] = None,
     page_size: int = Query(default=20, ge=1, le=500, description="Rows per page"),
     cursor: Optional[str] = Query(default=None, description="Opaque token from a previous page's next_cursor"),
     raw: bool = Query(default=False, description="Return JSON columns as raw strings instead of nested objects"),
 ):
-    df = _get_sorted_df(file_id)
+    df = _get_sorted_df(data_type, file_id, ip_name)
     try:
         page = get_page(df, page_size=page_size, cursor=cursor, decode_json=not raw)
     except ValueError as e:
         raise HTTPException(400, str(e))
-    page["file_id"] = file_id
+    page["file_id"]   = file_id
+    page["data_type"] = data_type.lower()
+    page["ip_name"]   = ip_name
     return JSONResponse(page)
 
 
-@router.get("/", summary="List available report file_ids")
+@router.get("/", summary="List available report file_ids across every type/IP folder")
 async def list_reports():
-    files = sorted(REPORT_DIR.glob("*_report.parquet"))
+    files = sorted(iter_all_outputs(kind="report"), key=lambda t: t[2])
     return {
         "reports": [
-            {"file_id": p.stem.replace("_report", ""),
-             "file": p.name,
-             "size_mb": round(p.stat().st_size / 1024 / 1024, 2)}
-            for p in files
+            {"data_type": data_type, "ip_name": ip_name, "file_id": file_id,
+             "file": p.name, "size_mb": round(p.stat().st_size / 1024 / 1024, 2)}
+            for data_type, ip_name, file_id, p in files
         ],
-        "report_dir": str(REPORT_DIR),
     }
 
 
-@router.delete("/{file_id}/cache", summary="Evict a report from the in-process cache")
-async def evict_cache(file_id: str):
-    key = str(_report_path(file_id))
+@router.delete("/{data_type}/{ip_name}/{file_id}/cache", summary="Evict a report from the in-process cache")
+@router.delete("/{data_type}/{file_id}/cache", summary="Evict a report from the in-process cache (certificates)")
+async def evict_cache(data_type: str, file_id: str, ip_name: Optional[str] = None):
+    key = str(_report_path(data_type, file_id, ip_name))
     with _cache_lock:
         existed = _cache.pop(key, None) is not None
-    return {"file_id": file_id, "evicted": existed}
+    return {"data_type": data_type.lower(), "ip_name": ip_name, "file_id": file_id, "evicted": existed}

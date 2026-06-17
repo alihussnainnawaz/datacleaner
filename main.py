@@ -5,6 +5,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from config import API_TITLE, API_VERSION, UPLOAD_DIR, LOGS_DIR, DEBUG
+from output_writer import ensure_all_directories
 import routes_upload
 import routes_clean
 from report import routes_report
@@ -14,6 +15,7 @@ from report import routes_report
 async def lifespan(app: FastAPI):
     UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
     LOGS_DIR.mkdir(parents=True, exist_ok=True)
+    ensure_all_directories()  # beneficiary/ banks/ certificates/ financials/
     yield
 
 

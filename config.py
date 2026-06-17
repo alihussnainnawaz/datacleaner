@@ -22,6 +22,26 @@ API_TITLE   = "Data Cleaning API"
 API_VERSION = "2.0.0"
 DEBUG       = os.getenv("DEBUG", "false").lower() == "true"
 
+# ── Output storage layout (type + IP folders) ─────────────────────────────────
+# All cleaned/report parquet outputs are written under BASE_DIR, one top-level
+# folder per data type. "beneficiary" is the folder that already existed.
+DATA_ROOT = BASE_DIR
+
+# logical type (lower-case, used in URLs) -> folder name on disk
+DATA_TYPE_FOLDERS: dict[str, str] = {
+    "beneficiary":  "beneficiary",
+    "banks":        "banks",
+    "certificates": "certificates",
+    "financials":   "financials",
+}
+
+# these types get an extra "implementing partner" subfolder:
+#     <type>/<ip_name>/<file_id>_cleaned.parquet
+#     <type>/<ip_name>/<file_id>_report.parquet
+# certificates is intentionally excluded — those files sit directly in
+# certificates/<file_id>_cleaned.parquet (no ip_name subfolder).
+TYPES_WITH_IP_SUBFOLDER: set[str] = {"beneficiary", "banks", "financials"}
+
 # ── Pakistani Banks ───────────────────────────────────────────────────────────
 BANK_NAMES = {
     "National Bank of Pakistan": ["NBP","national bank","natl bank"],
