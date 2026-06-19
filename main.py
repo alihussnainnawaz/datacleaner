@@ -8,6 +8,7 @@ from config import API_TITLE, API_VERSION, UPLOAD_DIR, DEBUG
 from output_writer import ensure_all_directories
 import routes_upload
 import routes_clean
+from report import routes_report
 
 
 @asynccontextmanager
@@ -33,8 +34,9 @@ app.add_middleware(
     expose_headers=["Content-Disposition"],
 )
 
-app.include_router(routes_upload.router, prefix="/api/upload", tags=["Upload"])
-app.include_router(routes_clean.router,  prefix="/api/clean",  tags=["Cleaning"])
+app.include_router(routes_upload.router,       prefix="/api/upload", tags=["Upload"])
+app.include_router(routes_clean.router,        prefix="/api/clean",  tags=["Cleaning"])
+app.include_router(routes_report.router,       prefix="/api/report", tags=["Report"])
 
 
 @app.get("/", tags=["Health"])
