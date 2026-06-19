@@ -124,6 +124,23 @@ def get_page(
     else:
         next_cursor = None
 
+    # ── Overall summary (full-file counts, not page-scoped) ──────────────────
+    # df is already in memory, so these are just 4 vectorised column ops.
+    cleaned_col = df["cleaned_values"] if "cleaned_values" in df.columns else pd.Series(dtype=str)
+    review_col  = df["manual_reviews"] if "manual_reviews" in df.columns else pd.Series(dtype=str)
+
+    def _nonempty(col: pd.Series) -> int:
+        """Count rows where the JSON string is a non-empty object/array."""
+        s = col.astype(str).str.strip()
+        return int((~s.isin(["", "null", "None", "{}", "[]"])).sum())
+
+    summary = {
+        "total_cleaned":        _nonempty(cleaned_col),
+        "total_review":         _nonempty(review_col),
+        "total_duplicate_uuid": int(df["is_dup"].astype(bool).sum())     if "is_dup"      in df.columns else 0,
+        "total_duplicate_cnic": int(df["is_dup_cnic"].astype(bool).sum()) if "is_dup_cnic" in df.columns else 0,
+    }
+
     return {
         "pagination": {
             "page_size":   page_size,
@@ -133,5 +150,6 @@ def get_page(
             "next_cursor": next_cursor,
             "cursor":      cursor,
         },
+        "summary": summary,
         "rows": rows,
     }
