@@ -333,7 +333,7 @@ def _step_trim(cleaned: pd.DataFrame, changes: dict, cc: _ColCache) -> None:
         before = cleaned[c].copy()
         s      = cc.s(c, before)
         after  = s.str.replace(_RE_WHITESPACE, " ", regex=True).str.strip()
-        mask   = before.notna() & (s != after)
+        mask   = before.notna() & (s != after).fillna(False)
         if mask.any():
             idxs = cleaned.index[mask]
             cleaned.loc[idxs, c] = after.loc[idxs].astype(object)
@@ -371,7 +371,7 @@ def _step_special_chars(
          .str.replace(_RE_WHITESPACE, " ", regex=True)
          .str.strip()
     )
-    mask = nonnull & (s != after)
+    mask = nonnull & (s != after).fillna(False)
     if mask.any():
         idxs = cleaned.index[mask]
         cleaned.loc[idxs, col] = after.loc[idxs].astype(object)
@@ -395,7 +395,7 @@ def _step_casing(
         step  = "TITLE_CASED"
     else:
         return
-    mask = nonnull & (s != after)
+    mask = nonnull & (s != after).fillna(False)
     if mask.any():
         idxs = cleaned.index[mask]
         cleaned.loc[idxs, col] = after.loc[idxs].astype(object)
@@ -411,7 +411,7 @@ def _step_bool(cleaned: pd.DataFrame, changes: dict, reviews: dict, col: str, cc
     after   = pd.Series(pd.NA, index=cleaned.index, dtype="string")
     after[key.isin(YES_VALUES)] = "Yes"
     after[key.isin(NO_VALUES)]  = "No"
-    auto = nonnull & after.notna() & (cc.s(col, before) != after)
+    auto = nonnull & after.notna() & (cc.s(col, before) != after).fillna(False)
     if auto.any():
         idxs = cleaned.index[auto]
         cleaned.loc[idxs, col] = after.loc[idxs].astype(object)
@@ -428,7 +428,7 @@ def _step_gender(cleaned: pd.DataFrame, changes: dict, reviews: dict, col: str, 
     nonnull = ~cc.null(col, before)
     key     = cc.s(col, before).str.lower().str.replace(r"[^a-z\s]+", " ", regex=True).str.strip()
     after   = key.map(GENDER_MAP)
-    auto    = nonnull & after.notna() & (cc.s(col, before) != after.astype("string"))
+    auto    = nonnull & after.notna() & (cc.s(col, before) != after.astype("string")).fillna(False)
     if auto.any():
         idxs = cleaned.index[auto]
         cleaned.loc[idxs, col] = after.loc[idxs].astype(object)
@@ -442,8 +442,8 @@ def _step_gender(cleaned: pd.DataFrame, changes: dict, reviews: dict, col: str, 
 def _step_cnic(
     cleaned: pd.DataFrame, changes: dict, reviews: dict,
     col: str, profile: dict, cc: _ColCache,
-) -> None:
-    """STEP 6 – CNIC: 13 digits, non-null, unique, no fakes."""
+) -> pd.Series:
+    """STEP 6 – CNIC: 13 digits, non-null, unique, no fakes. Returns duplicate mask."""
     before  = cleaned[col].copy()
     nonnull = ~cc.null(col, before)
     if profile.get("non_null"):
@@ -462,22 +462,25 @@ def _step_cnic(
         digits[sci] = before[sci].map(_sci_to_str)
 
     valid_len = digits.str.len() == 13
-    fmt_mask  = nonnull & valid_len & (cc.s(col, before).str.strip() != digits)
+    fmt_mask  = nonnull & valid_len & (cc.s(col, before).str.strip() != digits).fillna(False)
     if fmt_mask.any():
         idxs = cleaned.index[fmt_mask]
         cleaned.loc[idxs, col] = digits.loc[idxs].astype(object)
         _add_clean(changes, idxs, col, digits, "CNIC_FORMAT")
         cc.invalidate(col)
 
-    repeat = digits.map(lambda x: bool(__import__("re").fullmatch(r"(\d)\1{12}", str(x))) if x and str(x) not in ("", "<NA>") else False).astype(bool)
+    repeat = digits.str.fullmatch(r"(\d)\1{12}").fillna(False)
     invalid = nonnull & (~valid_len | digits.isin(CNIC_FAKE_VALUES) | repeat)
     if invalid.any():
         _add_review(reviews, cleaned.index[invalid], col, before)
 
+    duplicate_cnic_mask = pd.Series(False, index=cleaned.index)
     if profile.get("unique"):
         dup = nonnull & valid_len & digits.duplicated(keep=False)
         if dup.any():
             _add_review(reviews, cleaned.index[dup], col, before)
+            duplicate_cnic_mask = dup
+    return duplicate_cnic_mask
 
 
 def _step_uuid(
@@ -506,10 +509,11 @@ def _step_cell_no(
     cleaned: pd.DataFrame, changes: dict, reviews: dict,
     col: str, cc: _ColCache,
 ) -> None:
-    """STEP 8 – Cell No → 10 digits starting with 3."""
+    """STEP 8 – Cell No → 03XXXXXXXXX (11 chars: leading 0 + 10 digits starting with 3)."""
     before  = cleaned[col].copy()
     nonnull = ~cc.null(col, before)
     s       = cc.s(col, before).str.strip()
+    # strip country prefix / spaces / dashes → bare 10-digit number starting with 3
     digits  = (
         s.str.replace(r"^\+92", "", regex=True)
          .str.replace(r"^0092", "", regex=True)
@@ -518,11 +522,13 @@ def _step_cell_no(
          .str.replace(r"\D",    "", regex=True)
     )
     valid = nonnull & (digits.str.len() == _CELL_LEN) & digits.str.startswith(_CELL_PREFIX).fillna(False)
-    auto  = valid & (s != digits)
+    # final normalised form: prepend "0" → 03XXXXXXXXX
+    normalised = "0" + digits
+    auto  = valid & (s != normalised).fillna(False)
     if auto.any():
         idxs = cleaned.index[auto]
-        cleaned.loc[idxs, col] = digits.loc[idxs].astype(object)
-        _add_clean(changes, idxs, col, digits, "CELL_NO_NORMALIZED")
+        cleaned.loc[idxs, col] = normalised.loc[idxs].astype(object)
+        _add_clean(changes, idxs, col, normalised, "CELL_NO_NORMALIZED")
         cc.invalidate(col)
     if (nonnull & ~valid).any():
         _add_review(reviews, cleaned.index[nonnull & ~valid], col, before)
@@ -614,7 +620,7 @@ def _step_date(cleaned: pd.DataFrame, changes: dict, reviews: dict) -> None:
         parsed    = pd.to_datetime(before, errors="coerce", dayfirst=False, format="mixed")
         valid     = before.notna() & parsed.notna()
         formatted = parsed.dt.strftime(AUTO_DATE_FORMAT)
-        mask      = valid & (before.astype("string") != formatted.astype("string"))
+        mask      = valid & (before.astype("string") != formatted.astype("string")).fillna(False)
         if mask.any():
             idxs = cleaned.index[mask]
             cleaned.loc[idxs, c] = formatted.loc[idxs].astype(object)
@@ -724,7 +730,8 @@ def clean_dataframe_fast(
     _step_null_standardize(cleaned, changes, reviews, cc)
 
     # STEPS 3–12 – Schema-driven per-column
-    duplicate_uuid_mask = pd.Series(False, index=cleaned.index)
+    duplicate_uuid_mask  = pd.Series(False, index=cleaned.index)
+    duplicate_cnic_mask  = pd.Series(False, index=cleaned.index)
     uuid_col: str | None = None
 
     for col, profile in _SCHEMA.items():
@@ -733,7 +740,8 @@ def clean_dataframe_fast(
         col_type = profile.get("type", "string")
 
         if col_type == "cnic":
-            _step_cnic(cleaned, changes, reviews, col, profile, cc)
+            cnic_dup_mask       = _step_cnic(cleaned, changes, reviews, col, profile, cc)
+            duplicate_cnic_mask = duplicate_cnic_mask | cnic_dup_mask
 
         elif col_type == "numeric":
             if profile.get("non_null") or profile.get("unique"):
@@ -789,8 +797,9 @@ def clean_dataframe_fast(
         str(c): _series_to_json_list(original[c]) for c in original.columns
     }
 
-    uuid_arr = uuid_values.tolist()
-    dup_arr  = duplicate_uuid_mask.tolist()
+    uuid_arr      = uuid_values.tolist()
+    dup_arr       = duplicate_uuid_mask.tolist()
+    cnic_dup_arr  = duplicate_cnic_mask.tolist()
     seen: dict[str, int] = {}
     response: dict[str, dict] = {}
     n_rows = len(original)
@@ -804,10 +813,11 @@ def clean_dataframe_fast(
         seen[base_uuid] = seen.get(base_uuid, 0) + 1
         key = base_uuid if seen[base_uuid] == 1 else f"{base_uuid}__duplicate_row_{i + 2}"
         response[key] = {
-            "original_values":         {c: col_arrays[c][i] for c in col_names},
+            "original_values":         {c: col_arrays[c][i] for c in col_names if c in (changes.get(i, {}).keys() | reviews.get(i, {}).keys())},
             "cleaned_values":          changes.get(i, {}),
             "manual_reviews_required": reviews.get(i, {}),
             "IS DUPLICATED UUID":      dup_arr[i],
+            "IS DUPLICATED CNIC":      cnic_dup_arr[i],
         }
 
     return cleaned, response

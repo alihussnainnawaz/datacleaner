@@ -3,12 +3,13 @@ pagination.py
 ─────────────
 Cursor-based pagination over a *_report.parquet file (per-record cleaning audit).
 
-The report parquet has 5 columns:
+The report parquet has 6 columns:
     uuid             – unique record id (the cursor key)
     original_values  – JSON string
     cleaned_values   – JSON string
     manual_reviews   – JSON string
-    is_dup           – bool
+    is_dup           – bool  (duplicate UUID)
+    is_dup_cnic      – bool  (duplicate CNIC)
 
 Cursor model
 ------------
@@ -104,7 +105,8 @@ def get_page(
             "original_values": r.get("original_values", ""),
             "cleaned_values":  r.get("cleaned_values", ""),
             "manual_reviews":  r.get("manual_reviews", ""),
-            "is_dup":          bool(r.get("is_dup", False)),
+            "is_dup":          bool(r.get("is_dup",      False)),
+            "is_dup_cnic":     bool(r.get("is_dup_cnic", False)),
         }
         if decode_json:
             for c in JSON_COLUMNS:

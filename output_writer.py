@@ -1,46 +1,16 @@
 """
 output_writer.py
 ────────────────
-Writes outputs into a type + IP folder layout instead of one flat folder:
+Final storage layout:
 
-    beneficiary/<ip_name>/<file_id>_cleaned.parquet
-    beneficiary/<ip_name>/<file_id>_report.parquet
-    banks/<ip_name>/<file_id>_cleaned.parquet
-    banks/<ip_name>/<file_id>_report.parquet
-    financials/<ip_name>/<file_id>_cleaned.parquet
-    financials/<ip_name>/<file_id>_report.parquet
-    certificates/<file_id>_cleaned.parquet      (no ip_name subfolder)
-    certificates/<file_id>_report.parquet
+    beneficiary/<ip_name>/<ip_name>_cleaned.parquet   IP required
+    beneficiary/<ip_name>/<ip_name>_report.parquet
+    certificates/<ip_name>/<ip_name>_cleaned.parquet  IP required
+    certificates/<ip_name>/<ip_name>_report.parquet
+    Banks_Financials/Banks_Financials_cleaned.parquet  no IP, fixed stem
+    Banks_Financials/Banks_Financials_report.parquet
 
-`data_type` is one of: beneficiary, banks, certificates, financials
-(case-insensitive). `ip_name` (implementing partner) is required for every
-type except certificates — see config.TYPES_WITH_IP_SUBFOLDER.
-
-FILE 1 — {file_id}_cleaned.parquet   (~10 MB)
-    The full cleaned dataset. Open in pandas, Excel Power Query, or DuckDB.
-
-FILE 2 — {file_id}_report.parquet    (~16 MB vs 451 MB JSON)
-    Per-record cleaning report — same logical structure as the reference JSON
-    but 96% smaller. One row per record with 5 columns:
-
-        uuid             – DA_UUID (or ROW_N fallback)
-        original_values  – JSON string: only the cols that were touched
-        cleaned_values   – JSON string: {col: [new_val, step_tags]}
-        manual_reviews   – JSON string: {col: original_val}
-        is_dup           – bool: duplicate UUID flag
-
-    Read back in Python:
-        df = pd.read_parquet("beneficiary/Hands/xxx_report.parquet")
-        import json
-        record = df[df.uuid == "1546264"].iloc[0]
-        print(json.loads(record.cleaned_values))
-
-Why not full JSON?
-    Original JSON stored all 47 columns per row even when only 5 changed.
-    That alone was 280 MB of the 451 MB. Here we store only touched columns.
-
-Output format is parquet ONLY. If fastparquet is missing, the module refuses
-to import rather than silently degrading to CSV.
+`output_dir` returned as a relative path from DATA_ROOT (e.g. "beneficiary/TRDP").
 """
 from __future__ import annotations
 
@@ -51,19 +21,19 @@ from typing import Any, Optional
 
 import pandas as pd
 
-from config import DATA_ROOT, DATA_TYPE_FOLDERS, TYPES_WITH_IP_SUBFOLDER
+from config import (
+    DATA_ROOT, DATA_TYPE_FOLDERS,
+    TYPES_WITH_IP_SUBFOLDER, FIXED_STEM,
+)
 
 try:
     import fastparquet as _fp  # noqa: F401
 except ImportError as e:
     raise RuntimeError(
-        "fastparquet is not installed in this environment — outputs would "
-        "silently fall back to CSV. Run `pip install -r requirements.txt` "
+        "fastparquet is not installed. Run `pip install -r requirements.txt` "
         "into the venv you launch the server with, then restart."
     ) from e
 
-# kept for backward compatibility with any code importing the old constant —
-# points at the same place it always did (beneficiary/), still auto-created.
 OUTPUT_DIR = DATA_ROOT / DATA_TYPE_FOLDERS["beneficiary"]
 OUTPUT_DIR.mkdir(exist_ok=True)
 
@@ -71,10 +41,10 @@ _BAD_SEGMENT_RE = re.compile(r"[\\/]|\.\.")
 
 
 class InvalidDataLocation(ValueError):
-    """Raised when (data_type, ip_name) doesn't describe a valid storage location."""
+    """Raised when (data_type, ip_name) combo is invalid."""
 
 
-# ── path resolution ────────────────────────────────────────────────────────
+# ── helpers ───────────────────────────────────────────────────────────────────
 
 def normalise_type(data_type: str) -> str:
     key = (data_type or "").strip().lower()
@@ -82,10 +52,6 @@ def normalise_type(data_type: str) -> str:
         allowed = ", ".join(sorted(DATA_TYPE_FOLDERS))
         raise InvalidDataLocation(f"Unknown data type '{data_type}'. Allowed: {allowed}.")
     return key
-
-
-def requires_ip_subfolder(data_type: str) -> bool:
-    return normalise_type(data_type) in TYPES_WITH_IP_SUBFOLDER
 
 
 def _safe_segment(name: str, label: str) -> str:
@@ -99,13 +65,14 @@ def _safe_segment(name: str, label: str) -> str:
 
 def resolve_dir(data_type: str, ip_name: Optional[str] = None, *, create: bool = True) -> Path:
     """
-    Resolve (and optionally create) the on-disk folder for a given data type / IP.
+    Resolve the on-disk output folder:
 
-        beneficiary | banks | financials  -> DATA_ROOT/<type>/<ip_name>/
-        certificates                       -> DATA_ROOT/<type>/   (no ip_name)
+        beneficiary  → DATA_ROOT/beneficiary/<ip_name>/   (ip required)
+        certificates → DATA_ROOT/certificates/<ip_name>/  (ip required)
+        banks        → DATA_ROOT/Banks_Financials/         (no ip)
+        financials   → DATA_ROOT/Banks_Financials/         (no ip)
 
-    Raises InvalidDataLocation on bad input (unknown type, missing/extra
-    ip_name, path-traversal characters, etc).
+    Raises InvalidDataLocation on bad input.
     """
     key    = normalise_type(data_type)
     folder = DATA_ROOT / DATA_TYPE_FOLDERS[key]
@@ -113,14 +80,14 @@ def resolve_dir(data_type: str, ip_name: Optional[str] = None, *, create: bool =
     if key in TYPES_WITH_IP_SUBFOLDER:
         if not ip_name:
             raise InvalidDataLocation(
-                f"Data type '{key}' requires an ip_name subfolder — "
+                f"Data type '{key}' requires an ip_name — "
                 f"use /{key}/<ip_name>/<file_id>."
             )
         folder = folder / _safe_segment(ip_name, "ip_name")
     else:
         if ip_name:
             raise InvalidDataLocation(
-                f"Data type '{key}' does not use an ip_name subfolder — "
+                f"Data type '{key}' does not use an ip_name — "
                 f"use /{key}/<file_id> (no ip_name)."
             )
 
@@ -129,13 +96,28 @@ def resolve_dir(data_type: str, ip_name: Optional[str] = None, *, create: bool =
     return folder
 
 
+def output_stem(data_type: str, file_id: str, ip_name: Optional[str] = None) -> str:
+    """
+    Return the filename stem for output parquets:
+        beneficiary / certificates  → ip_name          (e.g. "TRDP")
+        banks / financials          → "Banks_Financials" (fixed)
+    """
+    key = normalise_type(data_type)
+    if key in FIXED_STEM:
+        return FIXED_STEM[key]          # always "Banks_Financials"
+    return ip_name or file_id           # ip_name for beneficiary/certificates
+
+
 def ensure_all_directories() -> None:
-    """Create the 4 top-level type folders (call once at app startup)."""
+    """Create all top-level type folders at startup."""
+    seen: set[str] = set()
     for folder_name in DATA_TYPE_FOLDERS.values():
-        (DATA_ROOT / folder_name).mkdir(parents=True, exist_ok=True)
+        if folder_name not in seen:
+            (DATA_ROOT / folder_name).mkdir(parents=True, exist_ok=True)
+            seen.add(folder_name)
 
 
-# ── parquet I/O ────────────────────────────────────────────────────────────
+# ── parquet I/O ───────────────────────────────────────────────────────────────
 
 def _write(df: pd.DataFrame, path: Path) -> None:
     import fastparquet as fp
@@ -150,27 +132,35 @@ def write_outputs(
     ip_name: Optional[str] = None,
 ) -> dict[str, Any]:
     """
-    Save cleaned dataset + per-record report under the folder for
-    (data_type, ip_name). Auto-called after every clean run.
-    Returns metadata dict (sizes, paths, urls).
+    Save cleaned dataset + per-record report.
+
+    Output examples:
+        beneficiary/TRDP/TRDP_cleaned.parquet
+        certificates/Hands/Hands_cleaned.parquet
+        Banks_Financials/Banks_Financials_cleaned.parquet
     """
     out_dir = resolve_dir(data_type, ip_name)
-    ext = ".parquet"
+    ext     = ".parquet"
+    stem    = output_stem(data_type, file_id, ip_name)
 
-    # ── FILE 1: full cleaned dataset ──────────────────────────────────────────
-    cleaned_path = out_dir / f"{file_id}_cleaned{ext}"
-    clean_str = cleaned_df.astype(str).replace({"None": "", "nan": "", "<NA>": ""})
-    _write(clean_str, cleaned_path)
+    # FILE 1 — cleaned dataset
+    # Fill NA per-column instead of astype(str) on the whole frame — avoids
+    # creating a full string copy of 100MB+ data just to normalise nulls.
+    cleaned_path = out_dir / f"{stem}_cleaned{ext}"
+    clean_out = cleaned_df.copy()
+    for col in clean_out.columns:
+        clean_out[col] = clean_out[col].where(clean_out[col].notna(), other="")
+    _write(clean_out, cleaned_path)
+    del clean_out
 
-    # ── FILE 2: per-record report (compact, same shape as reference JSON) ─────
+    # FILE 2 — per-record report
     report_rows: list[dict] = []
     for uuid_key, v in result.items():
-        ov           = v["original_values"]
-        cv           = v["cleaned_values"]
-        rv           = v["manual_reviews_required"]
-        is_dup       = bool(v["IS DUPLICATED UUID"])
+        ov     = v["original_values"]
+        cv     = v["cleaned_values"]
+        rv     = v["manual_reviews_required"]
+        is_dup = bool(v["IS DUPLICATED UUID"])
 
-        # only store original values for columns that were actually touched
         touched      = set(cv.keys()) | set(rv.keys())
         orig_touched = {c: ov.get(c) for c in touched if c in ov}
 
@@ -180,19 +170,26 @@ def write_outputs(
             "cleaned_values":  json.dumps(cv,           default=str, ensure_ascii=False),
             "manual_reviews":  json.dumps(rv,           default=str, ensure_ascii=False),
             "is_dup":          is_dup,
+            "is_dup_cnic":     bool(v.get("IS DUPLICATED CNIC", False)),
         })
 
     report_df   = pd.DataFrame(report_rows)
-    report_path = out_dir / f"{file_id}_report{ext}"
+    report_path = out_dir / f"{stem}_report{ext}"
     _write(report_df, report_path)
 
     cleaned_mb = round(cleaned_path.stat().st_size / 1024 / 1024, 2)
     report_mb  = round(report_path.stat().st_size  / 1024 / 1024, 2)
 
+    try:
+        rel_dir = out_dir.relative_to(DATA_ROOT)
+    except ValueError:
+        rel_dir = out_dir
+
     return {
         "data_type":       normalise_type(data_type),
         "ip_name":         ip_name,
-        "output_dir":      out_dir,
+        "stem":            stem,
+        "output_dir":      rel_dir,
         "cleaned_path":    cleaned_path,
         "report_path":     report_path,
         "ext":             ext,
@@ -203,22 +200,20 @@ def write_outputs(
 
 
 def read_report(file_id: str, data_type: str, ip_name: Optional[str] = None) -> pd.DataFrame | None:
-    p = resolve_dir(data_type, ip_name, create=False) / f"{file_id}_report.parquet"
+    stem = output_stem(data_type, file_id, ip_name)
+    p    = resolve_dir(data_type, ip_name, create=False) / f"{stem}_report.parquet"
     return pd.read_parquet(p, engine="fastparquet") if p.exists() else None
 
 
 def read_cleaned(file_id: str, data_type: str, ip_name: Optional[str] = None) -> pd.DataFrame | None:
-    p = resolve_dir(data_type, ip_name, create=False) / f"{file_id}_cleaned.parquet"
+    stem = output_stem(data_type, file_id, ip_name)
+    p    = resolve_dir(data_type, ip_name, create=False) / f"{stem}_cleaned.parquet"
     return pd.read_parquet(p, engine="fastparquet") if p.exists() else None
 
 
-# ── cross-folder listing (used by /logs and /api/report/) ────────────────────
-
 def iter_all_outputs(kind: str = "report"):
-    """
-    Yield (data_type, ip_name, file_id, path) for every {kind} parquet
-    ('report' or 'cleaned') found across all 4 type folders.
-    """
+    """Yield (data_type, ip_name, stem, path) for every {kind} parquet found."""
+    seen_folders: set[str] = set()
     for key, folder_name in DATA_TYPE_FOLDERS.items():
         base = DATA_ROOT / folder_name
         if not base.exists():
@@ -228,5 +223,8 @@ def iter_all_outputs(kind: str = "report"):
                 for p in ip_dir.glob(f"*_{kind}.parquet"):
                     yield key, ip_dir.name, p.stem.replace(f"_{kind}", ""), p
         else:
-            for p in base.glob(f"*_{kind}.parquet"):
-                yield key, None, p.stem.replace(f"_{kind}", ""), p
+            # banks and financials share Banks_Financials/ — only scan once
+            if folder_name not in seen_folders:
+                seen_folders.add(folder_name)
+                for p in base.glob(f"*_{kind}.parquet"):
+                    yield key, None, p.stem.replace(f"_{kind}", ""), p

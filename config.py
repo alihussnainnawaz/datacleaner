@@ -4,9 +4,7 @@ from pathlib import Path
 
 BASE_DIR   = Path(__file__).resolve().parent
 UPLOAD_DIR = BASE_DIR / "uploads"
-LOGS_DIR   = BASE_DIR / "logs"
-UPLOAD_DIR.mkdir(exist_ok=True)
-LOGS_DIR.mkdir(exist_ok=True)
+# Folders are created at runtime by lifespan in main.py — not at import time
 
 ALLOWED_EXTENSIONS  = {".xlsx", ".xls", ".csv"}
 MAX_FILE_SIZE_MB    = 500
@@ -22,27 +20,29 @@ API_TITLE   = "Data Cleaning API"
 API_VERSION = "2.0.0"
 DEBUG       = os.getenv("DEBUG", "false").lower() == "true"
 
-# ── Output storage layout (type + IP folders) ─────────────────────────────────
-# All cleaned/report parquet outputs are written under BASE_DIR, one top-level
-# folder per data type. "beneficiary" is the folder that already existed.
+# ── Output storage layout ──────────────────────────────────────────────────────
 DATA_ROOT = BASE_DIR
 
 # logical type (lower-case, used in URLs) -> folder name on disk
 DATA_TYPE_FOLDERS: dict[str, str] = {
     "beneficiary":  "beneficiary",
-    "banks":        "banks",
+    "banks":        "Banks_Financials",   # shared folder
+    "financials":   "Banks_Financials",   # shared folder
     "certificates": "certificates",
-    "financials":   "financials",
 }
 
-# these types get an extra "implementing partner" subfolder:
-#     <type>/<ip_name>/<file_id>_cleaned.parquet
-#     <type>/<ip_name>/<file_id>_report.parquet
-# certificates is intentionally excluded — those files sit directly in
-# certificates/<file_id>_cleaned.parquet (no ip_name subfolder).
-TYPES_WITH_IP_SUBFOLDER: set[str] = {"beneficiary", "banks", "financials"}
+# Fixed output stem for types that share a folder (no ip_name, no file_id)
+FIXED_STEM: dict[str, str] = {
+    "banks":      "Banks_Financials",
+    "financials": "Banks_Financials",
+}
 
-# ── Pakistani Banks ───────────────────────────────────────────────────────────
+# These types require an ip_name subfolder:
+#   <type>/<ip_name>/<ip_name>_cleaned.parquet
+#   <type>/<ip_name>/<ip_name>_report.parquet
+TYPES_WITH_IP_SUBFOLDER: set[str] = {"beneficiary", "certificates"}
+
+# ── Pakistani Banks ────────────────────────────────────────────────────────────
 BANK_NAMES = {
     "National Bank of Pakistan": ["NBP","national bank","natl bank"],
     "Bank of Punjab":            ["BOP","bank of punjab","b.o.p"],
@@ -63,7 +63,7 @@ for canonical, aliases in BANK_NAMES.items():
     for alias in aliases:
         BANK_ALIAS_MAP[alias.lower()] = canonical
 
-# ── Sindh Geography ───────────────────────────────────────────────────────────
+# ── Sindh Geography ────────────────────────────────────────────────────────────
 SINDH_DISTRICTS = [
     "Badin","Dadu","Ghotki","Hyderabad","Jacobabad","Jamshoro",
     "Karachi Central","Karachi East","Karachi South","Karachi West",
