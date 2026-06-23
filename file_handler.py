@@ -57,7 +57,6 @@ async def save_upload(file: UploadFile) -> dict:
 
 def load_dataframe(file_id: str) -> tuple[pd.DataFrame, Path]:
     matches = list(UPLOAD_DIR.glob(f"{file_id}.*"))
-    # prefer original over _cleaned
     matches = [m for m in matches if "_cleaned" not in m.stem] or matches
     if not matches:
         raise HTTPException(404, f"No file found for file_id '{file_id}'.")
@@ -69,7 +68,14 @@ def load_dataframe(file_id: str) -> tuple[pd.DataFrame, Path]:
         elif suffix == ".xls":
             df = pd.read_excel(file_path, engine="xlrd", dtype=str)
         elif suffix == ".csv":
-            df = pd.read_csv(file_path, dtype=str, low_memory=False)
+            for encoding in ("utf-8-sig", "utf-8", "latin-1", "cp1252"):
+                try:
+                    df = pd.read_csv(file_path, dtype=str, low_memory=False, encoding=encoding)
+                    break
+                except UnicodeDecodeError:
+                    continue
+            else:
+                raise HTTPException(422, "Could not decode CSV — unsupported encoding.")
         else:
             raise HTTPException(400, f"Unsupported format: {suffix}")
     except HTTPException:
