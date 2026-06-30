@@ -3,13 +3,19 @@ pagination.py
 ─────────────
 Cursor-based pagination over a *_report.parquet file (per-record cleaning audit).
 
-The report parquet has 6 columns:
-    uuid             – unique record id (the cursor key)
-    original_values  – JSON string
-    cleaned_values   – JSON string
-    manual_reviews   – JSON string
-    is_dup           – bool  (duplicate UUID)
-    is_dup_cnic      – bool  (duplicate CNIC)
+The report parquet has 8 columns:
+    uuid                – unique record id (the cursor key)
+    original_values     – JSON string
+    cleaned_values      – JSON string
+    manual_reviews      – JSON string
+    is_dup              – bool  (duplicate UUID)
+    is_dup_cnic         – bool  (duplicate CNIC)
+    validation_status   – JSON string: {"result": "PASS"|"FAIL", "filters": [...]}
+                           (full per-filter detail — every configured filter,
+                           pass or fail, with column/condition/actual value)
+    validation_result   – string: "PASS" | "FAIL"
+                           (flat shortcut so callers can filter/sort without
+                           parsing validation_status's JSON)
 
 Cursor model
 ------------
@@ -29,7 +35,7 @@ from typing import Any, Optional
 import pandas as pd
 
 CURSOR_COLUMN = "uuid"
-JSON_COLUMNS = ("original_values", "cleaned_values", "manual_reviews","validation_status")
+JSON_COLUMNS = ("original_values", "cleaned_values", "manual_reviews")
 
 
 # ── cursor encode / decode ─────────────────────────────────────────────────────
@@ -128,19 +134,37 @@ def get_page(
 
     window = df.iloc[start : start + page_size]
     rows: list[dict[str, Any]] = []
+    _EMPTY_VALIDATION_JSON = '{"result": "PASS", "filters": []}'
     for _, r in window.iterrows():
         row = {
-            "uuid":            r["uuid"],
-            "original_values": r.get("original_values", ""),
-            "cleaned_values":  r.get("cleaned_values", ""),
-            "manual_reviews":  r.get("manual_reviews", ""),
-            "is_dup":          bool(r.get("is_dup",      False)),
-            "is_dup_cnic":     bool(r.get("is_dup_cnic", False)),
+            "uuid":                r["uuid"],
+            "original_values":     r.get("original_values", ""),
+            "cleaned_values":      r.get("cleaned_values",  ""),
+            "manual_reviews":      r.get("manual_reviews",  ""),
+            "is_dup":              r.get("is_dup",      "false") in (True, "true", "True", 1),
+            "is_dup_cnic":         r.get("is_dup_cnic", "false") in (True, "true", "True", 1),
+            # Full JSON: {"result": "PASS"|"FAIL", "filters": [...]} — NOT a
+            # bare "PASS"/"FAIL" string, so the default must be valid JSON
+            # too, or decode_json=True below would throw on an empty row.
+            "validation_status":   r.get("validation_status") or _EMPTY_VALIDATION_JSON,
+            # Flat shortcut already written alongside validation_status —
+            # surface it directly so callers needing only pass/fail (e.g. a
+            # status column or filter) don't have to parse JSON for it.
+            "validation_result":   r.get("validation_result", "PASS"),
         }
         if decode_json:
             for c in JSON_COLUMNS:
                 val = row.get(c)
                 row[c] = json.loads(val) if isinstance(val, str) and val else {}
+            # validation_status decodes to an OBJECT ({"result", "filters"}),
+            # not {} on empty, since "no filters configured" is itself a
+            # meaningful PASS result, not an absence of data the way an
+            # empty original_values/cleaned_values/manual_reviews JSON is.
+            vs = row.get("validation_status")
+            try:
+                row["validation_status"] = json.loads(vs) if isinstance(vs, str) else vs
+            except (json.JSONDecodeError, TypeError):
+                row["validation_status"] = {"result": "PASS", "filters": []}
         rows.append(row)
 
     has_more = (start + page_size) < total

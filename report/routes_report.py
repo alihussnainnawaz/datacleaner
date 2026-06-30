@@ -92,9 +92,9 @@ async def get_report_page(
         page_result = get_page(df, page_size=page_size, cursor=cursor, decode_json=not raw, page=page)
     except ValueError as e:
         raise HTTPException(400, str(e))
-    page["file_id"]   = file_id
-    page["data_type"] = data_type.lower()
-    page["ip_name"]   = ip_name
+    page_result["file_id"]   = file_id
+    page_result["data_type"] = data_type.lower()
+    page_result["ip_name"]   = ip_name
 
     # Attach validation summary from sidecar JSON if present
     import json as _json
@@ -103,11 +103,11 @@ async def get_report_page(
         out_dir = resolve_dir(data_type, ip_name, create=False)
         sidecar = out_dir / f"{file_id}_validation_summary.json"
         if sidecar.exists():
-            page["validation_summary"] = _json.loads(sidecar.read_text())
+            page_result["validation_summary"] = _json.loads(sidecar.read_text())
     except Exception:
         pass
 
-    return JSONResponse(page)
+    return JSONResponse(page_result)
 
 
 @router.get("/", summary="List available report file_ids across every type/IP folder")
