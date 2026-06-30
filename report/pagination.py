@@ -68,6 +68,8 @@ def load_report(path: Path) -> pd.DataFrame:
         )
     df[CURSOR_COLUMN] = df[CURSOR_COLUMN].astype(str)
 
+    # No __validation_summary__ row in the parquet — it's stored as a sidecar JSON
+
     numeric = pd.to_numeric(df[CURSOR_COLUMN], errors="coerce")
     if numeric.notna().all():
         df["__sort_key__"] = numeric.astype("int64")
@@ -85,28 +87,56 @@ def get_page(
     page_size: int,
     cursor: Optional[str] = None,
     decode_json: bool = True,
+    page: Optional[int] = None,
 ) -> dict[str, Any]:
-    """Return one page of rows after `cursor`, plus a next_cursor token
-    (None when the file is exhausted)."""
+    """Return one page of rows, plus a next_cursor token (None when the file
+    is exhausted) and full page-count metadata for direct page-number jumps.
+
+    Two ways to choose which page:
+      - cursor  (existing, forward-only): resumes after the last row of a
+        previous page. Cheap, stable under concurrent appends, but can only
+        move forward one page at a time.
+      - page    (new, 1-based): jumps directly to any page by offset —
+        start = (page - 1) * page_size — against the already-sorted,
+        already-in-memory dataframe, so this is a plain O(1) slice, not a
+        walk through every preceding page. Lets a client request "page 4"
+        directly instead of paging through 1 → 2 → 3 → 4.
+
+    If both are omitted, returns page 1. If both are given, `page` wins
+    (it's the more explicit request). `cursor`-based clients are completely
+    unaffected — this is purely additive.
+    """
     if page_size < 1:
         raise ValueError("page_size must be >= 1")
 
-    if cursor is None:
+    total = len(df)
+    total_pages = max(1, -(-total // page_size))  # ceil(total / page_size), never 0
+
+    if page is not None:
+        if page < 1:
+            raise ValueError("page must be >= 1")
+        start = (page - 1) * page_size
+    elif cursor is None:
         start = 0
     else:
         last_key = decode_cursor(cursor)
         start = int(df["__sort_key__"].searchsorted(last_key, side="right"))
 
+    # Current page number from whichever start we ended up with (so cursor-
+    # based callers also get an accurate current_page in the response).
+    current_page = (start // page_size) + 1 if total else 1
+
     window = df.iloc[start : start + page_size]
     rows: list[dict[str, Any]] = []
     for _, r in window.iterrows():
         row = {
-            "uuid":            r["uuid"],
-            "original_values": r.get("original_values", ""),
-            "cleaned_values":  r.get("cleaned_values", ""),
-            "manual_reviews":  r.get("manual_reviews", ""),
-            "is_dup":          bool(r.get("is_dup",      False)),
-            "is_dup_cnic":     bool(r.get("is_dup_cnic", False)),
+            "uuid":                r["uuid"],
+            "original_values":     r.get("original_values", ""),
+            "cleaned_values":      r.get("cleaned_values",  ""),
+            "manual_reviews":      r.get("manual_reviews",  ""),
+            "is_dup":              r.get("is_dup",      "false") in (True, "true", "True", 1),
+            "is_dup_cnic":         r.get("is_dup_cnic", "false") in (True, "true", "True", 1),
+            "validation_status":   r.get("validation_status", "PASS"),
         }
         if decode_json:
             for c in JSON_COLUMNS:
@@ -114,7 +144,6 @@ def get_page(
                 row[c] = json.loads(val) if isinstance(val, str) and val else {}
         rows.append(row)
 
-    total = len(df)
     has_more = (start + page_size) < total
     if rows and has_more:
         last_key = df["__sort_key__"].iloc[start + len(rows) - 1]
@@ -143,12 +172,17 @@ def get_page(
 
     return {
         "pagination": {
-            "page_size":   page_size,
-            "returned":    len(rows),
-            "total_rows":  total,
-            "has_more":    has_more,
-            "next_cursor": next_cursor,
-            "cursor":      cursor,
+            "page_size":    page_size,
+            "returned":     len(rows),
+            "total_rows":   total,
+            # New: lets the client render "Page X of Y" and a jump-to-page
+            # control instead of only Next/Prev.
+            "total_pages":  total_pages,
+            "current_page": current_page,
+            "has_more":     has_more,
+            "has_prev":     current_page > 1,
+            "next_cursor":  next_cursor,
+            "cursor":       cursor,
         },
         "summary": summary,
         "rows": rows,
