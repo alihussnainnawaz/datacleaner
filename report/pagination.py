@@ -29,7 +29,7 @@ from typing import Any, Optional
 import pandas as pd
 
 CURSOR_COLUMN = "uuid"
-JSON_COLUMNS = ("original_values", "cleaned_values", "manual_reviews")
+JSON_COLUMNS = ("original_values", "cleaned_values", "manual_reviews","validation_status")
 
 
 # ── cursor encode / decode ─────────────────────────────────────────────────────
@@ -130,13 +130,12 @@ def get_page(
     rows: list[dict[str, Any]] = []
     for _, r in window.iterrows():
         row = {
-            "uuid":                r["uuid"],
-            "original_values":     r.get("original_values", ""),
-            "cleaned_values":      r.get("cleaned_values",  ""),
-            "manual_reviews":      r.get("manual_reviews",  ""),
-            "is_dup":              r.get("is_dup",      "false") in (True, "true", "True", 1),
-            "is_dup_cnic":         r.get("is_dup_cnic", "false") in (True, "true", "True", 1),
-            "validation_status":   r.get("validation_status", "PASS"),
+            "uuid":            r["uuid"],
+            "original_values": r.get("original_values", ""),
+            "cleaned_values":  r.get("cleaned_values", ""),
+            "manual_reviews":  r.get("manual_reviews", ""),
+            "is_dup":          bool(r.get("is_dup",      False)),
+            "is_dup_cnic":     bool(r.get("is_dup_cnic", False)),
         }
         if decode_json:
             for c in JSON_COLUMNS:
