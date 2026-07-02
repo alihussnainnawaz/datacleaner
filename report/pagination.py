@@ -86,6 +86,21 @@ def load_report(path: Path) -> pd.DataFrame:
     return df
 
 
+# ── truthy helper ──────────────────────────────────────────────────────────────
+
+def _is_true(col: pd.Series) -> pd.Series:
+    """Robust truthy check for flag columns that may be real bools OR strings.
+
+    NOTE: do NOT use `.astype(bool)` on an object/string column here. For a
+    string dtype, `bool("false")` evaluates to True in Python because it's a
+    non-empty string — so `.astype(bool)` on a string column marks every
+    non-null row as True regardless of its actual value, silently inflating
+    duplicate counts to equal total_rows. This mirrors the explicit
+    membership check already used at the row level below.
+    """
+    return col.isin([True, "true", "True", 1])
+
+
 # ── pagination core ────────────────────────────────────────────────────────────
 
 def get_page(
@@ -189,8 +204,12 @@ def get_page(
     summary = {
         "total_cleaned":        _nonempty(cleaned_col),
         "total_review":         _nonempty(review_col),
-        "total_duplicate_uuid": int(df["is_dup"].astype(bool).sum())     if "is_dup"      in df.columns else 0,
-        "total_duplicate_cnic": int(df["is_dup_cnic"].astype(bool).sum()) if "is_dup_cnic" in df.columns else 0,
+        # FIX: was `.astype(bool).sum()`, which treats every non-null string
+        # (including the literal text "false") as truthy and inflated both
+        # counts to equal total_rows. Now uses the same explicit membership
+        # check as the row-level is_dup/is_dup_cnic logic above.
+        "total_duplicate_uuid": int(_is_true(df["is_dup"]).sum())      if "is_dup"      in df.columns else 0,
+        "total_duplicate_cnic": int(_is_true(df["is_dup_cnic"]).sum()) if "is_dup_cnic" in df.columns else 0,
     }
 
     return {

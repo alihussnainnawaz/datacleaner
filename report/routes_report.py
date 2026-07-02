@@ -17,11 +17,26 @@ Pagination contract
 - next_cursor == null  →  last page reached.
 The cursor is opaque; clients echo next_cursor back unchanged, never parse it.
 
+Duplicates endpoint
+--------------------
+    GET /api/report/{data_type}/{ip_name}/{file_id}/duplicates
+    GET /api/report/{data_type}/{file_id}/duplicates          (certificates)
+
+Returns the *entire* `_duplicates.parquet` file as one JSON payload — no
+pagination, no cursor. This is deliberately unbounded: duplicates are
+diagnostic data (rows flagged with a duplicate UUID or CNIC), expected to be
+a small slice of the dataset, not a substitute for browsing the full report.
+If a duplicates file ever grows large enough that this becomes a problem,
+the fix is a size guard that fails loud — not silently reintroducing
+pagination on an endpoint whose whole point is "give me everything at once."
+
 Performance
 -----------
-Each parquet is loaded + sorted once, then cached in-process keyed by
-(path, mtime). Repeated page requests for an unchanged file are served from
-memory. If the file is rewritten, its mtime changes and the cache rebuilds.
+Each parquet is loaded once, then cached in-process keyed by (path, mtime).
+Repeated requests for an unchanged file are served from memory. If the file
+is rewritten, its mtime changes and the cache rebuilds. Report pages and
+duplicates dumps use separate caches since they're different files with
+different access patterns (report is sorted once, duplicates is a raw dump).
 """
 from __future__ import annotations
 
@@ -42,15 +57,29 @@ router = APIRouter()
 _cache: dict[str, tuple[float, pd.DataFrame]] = {}
 _cache_lock = threading.Lock()
 
+# separate cache for duplicates dumps — not sorted/keyed the way report is
+_dup_cache: dict[str, tuple[float, pd.DataFrame]] = {}
+_dup_cache_lock = threading.Lock()
 
-def _report_path(data_type: str, file_id: str, ip_name: Optional[str] = None) -> Path:
+
+def _output_path(data_type: str, file_id: str, kind: str, ip_name: Optional[str] = None) -> Path:
+    """Resolve the on-disk path for a given output kind ('report' | 'duplicates' | ...).
+
+    Centralizes the file_id sanitization + folder resolution that used to
+    live only in _report_path, so every output kind shares one path-safety
+    check instead of each endpoint reimplementing it slightly differently.
+    """
     if "/" in file_id or "\\" in file_id or ".." in file_id:
         raise HTTPException(400, "Invalid file_id.")
     try:
         folder = resolve_dir(data_type, ip_name, create=False)
     except InvalidDataLocation as e:
         raise HTTPException(400, str(e))
-    return folder / f"{file_id}_report.parquet"
+    return folder / f"{file_id}_{kind}.parquet"
+
+
+def _report_path(data_type: str, file_id: str, ip_name: Optional[str] = None) -> Path:
+    return _output_path(data_type, file_id, "report", ip_name)
 
 
 def _get_sorted_df(data_type: str, file_id: str, ip_name: Optional[str] = None) -> pd.DataFrame:
@@ -73,6 +102,29 @@ def _get_sorted_df(data_type: str, file_id: str, ip_name: Optional[str] = None) 
 
     with _cache_lock:
         _cache[key] = (mtime, df)
+    return df
+
+
+def _get_duplicates_df(data_type: str, file_id: str, ip_name: Optional[str] = None) -> pd.DataFrame:
+    path = _output_path(data_type, file_id, "duplicates", ip_name)
+    if not path.exists():
+        raise HTTPException(404, f"No duplicates parquet for file_id '{file_id}'.")
+
+    mtime = path.stat().st_mtime
+    key = str(path)
+
+    with _dup_cache_lock:
+        cached = _dup_cache.get(key)
+        if cached and cached[0] == mtime:
+            return cached[1]
+
+    try:
+        df = pd.read_parquet(path, engine="fastparquet")
+    except Exception as e:
+        raise HTTPException(422, f"Could not read duplicates file: {e}")
+
+    with _dup_cache_lock:
+        _dup_cache[key] = (mtime, df)
     return df
 
 
@@ -110,6 +162,29 @@ async def get_report_page(
     return JSONResponse(page_result)
 
 
+@router.get("/{data_type}/{ip_name}/{file_id}/duplicates",
+            summary="Fetch the entire duplicates file as JSON — no pagination (beneficiary / banks / financials)")
+@router.get("/{data_type}/{file_id}/duplicates",
+            summary="Fetch the entire duplicates file as JSON — no pagination (certificates)")
+async def get_duplicates_full(
+    data_type: str,
+    file_id: str,
+    ip_name: Optional[str] = None,
+):
+    df = _get_duplicates_df(data_type, file_id, ip_name)
+    # NaN/NaT aren't valid JSON tokens — coerce to None before serializing,
+    # same as write_outputs() already does when it writes the parquet, but
+    # cheap insurance against any dtype that slips a float NaN through.
+    records = df.where(pd.notna(df), None).to_dict(orient="records")
+    return JSONResponse({
+        "data_type":  data_type.lower(),
+        "ip_name":    ip_name,
+        "file_id":    file_id,
+        "total_rows": len(records),
+        "rows":       records,
+    })
+
+
 @router.get("/", summary="List available report file_ids across every type/IP folder")
 async def list_reports():
     files = sorted(iter_all_outputs(kind="report"), key=lambda t: t[2])
@@ -122,10 +197,16 @@ async def list_reports():
     }
 
 
-@router.delete("/{data_type}/{ip_name}/{file_id}/cache", summary="Evict a report from the in-process cache")
-@router.delete("/{data_type}/{file_id}/cache", summary="Evict a report from the in-process cache (certificates)")
+@router.delete("/{data_type}/{ip_name}/{file_id}/cache", summary="Evict a report + duplicates from the in-process cache")
+@router.delete("/{data_type}/{file_id}/cache", summary="Evict a report + duplicates from the in-process cache (certificates)")
 async def evict_cache(data_type: str, file_id: str, ip_name: Optional[str] = None):
-    key = str(_report_path(data_type, file_id, ip_name))
+    report_key = str(_output_path(data_type, file_id, "report", ip_name))
+    dup_key    = str(_output_path(data_type, file_id, "duplicates", ip_name))
     with _cache_lock:
-        existed = _cache.pop(key, None) is not None
-    return {"data_type": data_type.lower(), "ip_name": ip_name, "file_id": file_id, "evicted": existed}
+        evicted_report = _cache.pop(report_key, None) is not None
+    with _dup_cache_lock:
+        evicted_duplicates = _dup_cache.pop(dup_key, None) is not None
+    return {
+        "data_type": data_type.lower(), "ip_name": ip_name, "file_id": file_id,
+        "evicted_report": evicted_report, "evicted_duplicates": evicted_duplicates,
+    }
