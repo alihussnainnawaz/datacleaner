@@ -1,0 +1,79 @@
+{
+  "total_rows": 148318,
+  "passed": 148318,
+  "failed": 0,
+  "filter_results": [
+    {
+      "label": "uuid: Duplicate",
+      "cond": "dup",
+      "flagged_count": 0,
+      "flagged_rows": [],
+      "color": "red"
+    },
+    {
+      "label": "uuid: Missing / Null",
+      "cond": "empty",
+      "flagged_count": 0,
+      "flagged_rows": [],
+      "color": "red"
+    },
+    {
+      "label": "Submitted By: Missing / Null",
+      "cond": "empty",
+      "flagged_count": 0,
+      "flagged_rows": [],
+      "color": "red"
+    },
+    {
+      "label": "Use of Acceptable Masonry: Missing / Null",
+      "cond": "empty",
+      "flagged_count": 0,
+      "flagged_rows": [],
+      "color": "red"
+    },
+    {
+      "label": "Use of Acceptable Bonds: Missing / Null",
+      "cond": "empty",
+      "flagged_count": 0,
+      "flagged_rows": [],
+      "color": "red"
+    },
+    {
+      "label": "Use of Appropriate Wall Thickness: Missing / Null",
+      "cond": "empty",
+      "flagged_count": 0,
+      "flagged_rows": [],
+      "color": "red"
+    },
+    {
+      "label": "Use of Specified Mortars: Missing / Null",
+      "cond": "empty",
+      "flagged_count": 0,
+      "flagged_rows": [],
+      "color": "red"
+    },
+    {
+      "label": "Location & Size of Windows: Missing / Null",
+      "cond": "empty",
+      "flagged_count": 0,
+      "flagged_rows": [],
+      "color": "red"
+    },
+    {
+      "label": "Use of Continuous RCC: Missing / Null",
+      "cond": "empty",
+      "flagged_count": 0,
+      "flagged_rows": [],
+      "color": "red"
+    },
+    {
+      "label": "lintel_submitted_at: Missing / Null",
+      "cond": "empty",
+      "flagged_count": 0,
+      "flagged_rows": [],
+      "color": "red"
+    }
+  ],
+  "has_predefined": false,
+  "has_user_filters": true
+}
