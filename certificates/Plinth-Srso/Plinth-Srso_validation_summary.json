@@ -1,0 +1,69 @@
+{
+  "total_rows": 526113,
+  "passed": 526112,
+  "failed": 1,
+  "filter_results": [
+    {
+      "label": "uuid: Missing / Null",
+      "cond": "empty",
+      "flagged_count": 0,
+      "flagged_rows": [],
+      "color": "red"
+    },
+    {
+      "label": "uuid: Duplicate",
+      "cond": "dup",
+      "flagged_count": 0,
+      "flagged_rows": [],
+      "color": "red"
+    },
+    {
+      "label": "type_of_construction: Missing / Null",
+      "cond": "empty",
+      "flagged_count": 0,
+      "flagged_rows": [],
+      "color": "red"
+    },
+    {
+      "label": "Depth_of_Foundation: Missing / Null",
+      "cond": "empty",
+      "flagged_count": 0,
+      "flagged_rows": [],
+      "color": "red"
+    },
+    {
+      "label": "Plinth_Area: Missing / Null",
+      "cond": "empty",
+      "flagged_count": 1,
+      "flagged_rows": [
+        454939
+      ],
+      "color": "red"
+    },
+    {
+      "label": "no_of_room_size: Missing / Null",
+      "cond": "empty",
+      "flagged_count": 1,
+      "flagged_rows": [
+        454939
+      ],
+      "color": "red"
+    },
+    {
+      "label": "width_foundation: Missing / Null",
+      "cond": "empty",
+      "flagged_count": 0,
+      "flagged_rows": [],
+      "color": "red"
+    },
+    {
+      "label": "plinth_submitted_at: Missing / Null",
+      "cond": "empty",
+      "flagged_count": 0,
+      "flagged_rows": [],
+      "color": "red"
+    }
+  ],
+  "has_predefined": false,
+  "has_user_filters": true
+}

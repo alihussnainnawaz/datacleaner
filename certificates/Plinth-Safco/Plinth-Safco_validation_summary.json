@@ -1,0 +1,101 @@
+{
+  "total_rows": 177244,
+  "passed": 177234,
+  "failed": 10,
+  "filter_results": [
+    {
+      "label": "uuid: Missing / Null",
+      "cond": "empty",
+      "flagged_count": 0,
+      "flagged_rows": [],
+      "color": "red"
+    },
+    {
+      "label": "uuid: Duplicate",
+      "cond": "dup",
+      "flagged_count": 0,
+      "flagged_rows": [],
+      "color": "red"
+    },
+    {
+      "label": "type_of_construction: Missing / Null",
+      "cond": "empty",
+      "flagged_count": 5,
+      "flagged_rows": [
+        43592,
+        84054,
+        132583,
+        132585,
+        132591
+      ],
+      "color": "red"
+    },
+    {
+      "label": "Depth_of_Foundation: Missing / Null",
+      "cond": "empty",
+      "flagged_count": 7,
+      "flagged_rows": [
+        43592,
+        132404,
+        132524,
+        132585,
+        132591,
+        154538,
+        170930
+      ],
+      "color": "red"
+    },
+    {
+      "label": "Plinth_Area: Missing / Null",
+      "cond": "empty",
+      "flagged_count": 6,
+      "flagged_rows": [
+        43592,
+        84054,
+        105838,
+        132583,
+        132585,
+        132591
+      ],
+      "color": "red"
+    },
+    {
+      "label": "no_of_room_size: Missing / Null",
+      "cond": "empty",
+      "flagged_count": 6,
+      "flagged_rows": [
+        43592,
+        84054,
+        105838,
+        132583,
+        132585,
+        132591
+      ],
+      "color": "red"
+    },
+    {
+      "label": "width_foundation: Missing / Null",
+      "cond": "empty",
+      "flagged_count": 7,
+      "flagged_rows": [
+        43592,
+        132404,
+        132524,
+        132585,
+        132591,
+        154538,
+        170930
+      ],
+      "color": "red"
+    },
+    {
+      "label": "plinth_submitted_at: Missing / Null",
+      "cond": "empty",
+      "flagged_count": 0,
+      "flagged_rows": [],
+      "color": "red"
+    }
+  ],
+  "has_predefined": false,
+  "has_user_filters": true
+}
