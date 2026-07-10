@@ -1,0 +1,65 @@
+{
+  "total_rows": 104412,
+  "passed": 104412,
+  "failed": 0,
+  "filter_results": [
+    {
+      "label": "uuid: Duplicate",
+      "cond": "dup",
+      "flagged_count": 0,
+      "flagged_rows": [],
+      "color": "red"
+    },
+    {
+      "label": "uuid: Missing / Null",
+      "cond": "empty",
+      "flagged_count": 0,
+      "flagged_rows": [],
+      "color": "red"
+    },
+    {
+      "label": "Roof & Slope Drain: Missing / Null",
+      "cond": "empty",
+      "flagged_count": 0,
+      "flagged_rows": [],
+      "color": "red"
+    },
+    {
+      "label": "Type of Roof: Missing / Null",
+      "cond": "empty",
+      "flagged_count": 0,
+      "flagged_rows": [],
+      "color": "red"
+    },
+    {
+      "label": "Use of Roof Insulation: Missing / Null",
+      "cond": "empty",
+      "flagged_count": 0,
+      "flagged_rows": [],
+      "color": "red"
+    },
+    {
+      "label": "Use of Reinforced Concrete: Missing / Null",
+      "cond": "empty",
+      "flagged_count": 0,
+      "flagged_rows": [],
+      "color": "red"
+    },
+    {
+      "label": "Safe Use of Any Hanging Load: Missing / Null",
+      "cond": "empty",
+      "flagged_count": 0,
+      "flagged_rows": [],
+      "color": "red"
+    },
+    {
+      "label": "roof_submitted_at: Missing / Null",
+      "cond": "empty",
+      "flagged_count": 0,
+      "flagged_rows": [],
+      "color": "red"
+    }
+  ],
+  "has_predefined": false,
+  "has_user_filters": true
+}
