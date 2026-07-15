@@ -6,6 +6,7 @@
     "total_duplicate_occurrences": 4634,
     "cnics_duplicated_in_single_ip": 2263,
     "cnics_duplicated_across_multiple_ips": 52,
+    "missing_cnics_count": 15030,
     "unique_ip_names": [
       "hands",
       "nrsp",

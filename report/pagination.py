@@ -24,6 +24,22 @@ A cursor is an opaque base64 token wrapping the sort key of the last row of the
 previous page. The next page returns the first `page_size` rows whose sort key
 is strictly greater than the cursor's. Because uuid is unique and ordering is
 stable, page boundaries never skip or duplicate rows.
+
+Page-number jumps
+-----------------
+`get_page` also accepts a 1-based `page` argument for direct offset jumps
+(page 1 -> page 7 -> back to page 3, etc.) against the already-sorted,
+already-in-memory dataframe. See `get_page` docstring for details.
+
+Generic list pagination
+------------------------
+`paginate_list` provides the exact same pagination contract (page_size,
+cursor, page, total_pages, current_page, has_more, has_prev, next_cursor)
+but over a plain in-memory list of dicts instead of a dataframe. This backs
+the duplicate-CNIC drill-down endpoints in routes_report.py, where the
+"rows" aren't read from a single sorted parquet but assembled in memory
+(per-CNIC summaries, or per-occurrence full records) from a pool that's
+already been computed once and cached.
 """
 from __future__ import annotations
 
@@ -228,4 +244,68 @@ def get_page(
         },
         "summary": summary,
         "rows": rows,
+    }
+
+
+# ── generic in-memory list pagination ──────────────────────────────────────────
+
+def paginate_list(
+    items: list[dict[str, Any]],
+    page_size: int,
+    cursor: Optional[str] = None,
+    page: Optional[int] = None,
+) -> dict[str, Any]:
+    """Page over a plain in-memory list of dicts using the exact same
+    contract as get_page (page_size / cursor / page -> pagination block +
+    rows), for endpoints whose "rows" aren't read live off a sorted
+    dataframe but assembled from an already-computed pool (e.g. the
+    duplicate-CNIC summary/occurrence drill-downs in routes_report.py).
+
+    The cursor here just wraps an integer offset (via the same
+    encode_cursor/decode_cursor used by get_page) rather than a sort key,
+    since a plain list has no natural sort-key column to resume from — the
+    list's own order (already fixed by the caller, e.g. sorted by cnic) is
+    the ordering. Same page-jump semantics as get_page: `page` wins over
+    `cursor` if both are given; omit both for page 1.
+    """
+    if page_size < 1:
+        raise ValueError("page_size must be >= 1")
+
+    total = len(items)
+    total_pages = max(1, -(-total // page_size))
+
+    if page is not None:
+        if page < 1:
+            raise ValueError("page must be >= 1")
+        start = (page - 1) * page_size
+    elif cursor is None:
+        start = 0
+    else:
+        offset = decode_cursor(cursor)
+        try:
+            start = int(offset)
+        except (TypeError, ValueError) as e:
+            raise ValueError(f"Invalid cursor token: {e}") from e
+        if start < 0:
+            start = 0
+
+    current_page = (start // page_size) + 1 if total else 1
+
+    window = items[start : start + page_size]
+    has_more = (start + len(window)) < total
+    next_cursor = encode_cursor(start + len(window)) if has_more else None
+
+    return {
+        "pagination": {
+            "page_size":    page_size,
+            "returned":     len(window),
+            "total_rows":   total,
+            "total_pages":  total_pages,
+            "current_page": current_page,
+            "has_more":     has_more,
+            "has_prev":     current_page > 1,
+            "next_cursor":  next_cursor,
+            "cursor":       cursor,
+        },
+        "rows": window,
     }
