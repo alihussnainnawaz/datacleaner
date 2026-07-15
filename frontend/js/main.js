@@ -66,7 +66,7 @@ document.addEventListener("DOMContentLoaded", () => {
   initUploadZone();
   pingBackend();
   renderProjectCards();
-  fetch("/api/coordinates").then(r => r.json()).then(d => {
+  fetch(API_BASE + "/coordinates").then(r => r.json()).then(d => {
     if (d && d.geojson) window._coordsGeoFeatures = d.geojson.features || [];
   }).catch(() => {});
 });
@@ -1055,7 +1055,7 @@ async function _promptRegexRule(col) {
       document.getElementById("regexRuleConfirmBtn").disabled = false;
       return;
     }
-    const res = await fetch(`/api/upload/${fileId}/clusters/${encodeURIComponent(col)}`).then(r => r.json());
+    const res = await fetch(`${API_BASE}/upload/${fileId}/clusters/${encodeURIComponent(col)}`).then(r => r.json());
     const allClusters = res.clusters || [];
 
     // Keep only clusters worth showing a decision for (>1 member); singletons
@@ -1569,7 +1569,7 @@ function _pollProgress(fileId) {
   _progTickTimer = setInterval(() => { if (activeIdx >= 0) render(); }, 200);
 
   if (typeof EventSource !== "undefined") {
-    const es = new EventSource(`/api/clean/progress-stream/${encodeURIComponent(fileId)}`);
+    const es = new EventSource(`${API_BASE}/clean/progress-stream/${encodeURIComponent(fileId)}`);
     _progEventSource = es;
     es.onmessage = (ev) => {
       try { applySnapshot(JSON.parse(ev.data)); } catch (e) { /* ignore malformed frame */ }
@@ -1584,7 +1584,7 @@ function _pollProgress(fileId) {
     // Extremely old browser without EventSource support — fall back to a
     // single one-shot fetch so the popup isn't permanently blank; no
     // repeated polling loop even in this fallback path.
-    fetch(`/api/clean/progress/${encodeURIComponent(fileId)}`)
+    fetch(`${API_BASE}/clean/progress/${encodeURIComponent(fileId)}`)
       .then(r => r.json()).then(applySnapshot).catch(() => {});
   }
 }
@@ -2035,7 +2035,7 @@ function _cellFlagClass(flags) {
 async function downloadCleanView() {
   const dt = state.cleanDataType, ip = state.cleanIpName || null;
   if (!dt) { showToast("Load a dataset first.", "error"); return; }
-  const base  = ip ? `/api/clean/${encodeURIComponent(dt)}/${encodeURIComponent(ip)}` : `/api/clean/${encodeURIComponent(dt)}`;
+  const base  = ip ? `${API_BASE}/clean/${encodeURIComponent(dt)}/${encodeURIComponent(ip)}` : `${API_BASE}/clean/${encodeURIComponent(dt)}`;
   const badge = document.getElementById("cleanFileBadge").textContent;
   const stem  = badge.replace("_cleaned.parquet", "");
   window.open(`${base}/${stem}/download/cleaned`, "_blank");

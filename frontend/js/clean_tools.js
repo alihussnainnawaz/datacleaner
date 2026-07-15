@@ -22,7 +22,7 @@ function _hasCleanedDataset() {
 // ── Direct tool API fetch ─────────────────────────────────────────────────────
 
 async function _toolFetch(endpoint, body) {
-  const res = await fetch("/api/clean/tools" + endpoint, {
+  const res = await fetch(API_BASE + "/clean/tools" + endpoint, {
     method:  "POST",
     headers: { "Content-Type": "application/json", "Accept": "application/json" },
     body:    JSON.stringify(body),
@@ -374,8 +374,8 @@ async function openStandardizeModal() {
       const dt  = state.cleanDataType;
       const ip  = state.cleanIpName || null;
       const url = ip
-        ? `/api/dataset/${encodeURIComponent(dt)}/${encodeURIComponent(ip)}?page=1&page_size=1`
-        : `/api/dataset/${encodeURIComponent(dt)}?page=1&page_size=1`;
+        ? `${API_BASE}/dataset/${encodeURIComponent(dt)}/${encodeURIComponent(ip)}?page=1&page_size=1`
+        : `${API_BASE}/dataset/${encodeURIComponent(dt)}?page=1&page_size=1`;
       const res  = await fetch(url);
       const data = await res.json();
       cols = data.columns || [];
@@ -583,8 +583,8 @@ async function openRegexModal() {
       const dt  = state.cleanDataType;
       const ip  = state.cleanIpName || null;
       const url = ip
-        ? `/api/dataset/${encodeURIComponent(dt)}/${encodeURIComponent(ip)}?page=1&page_size=1`
-        : `/api/dataset/${encodeURIComponent(dt)}?page=1&page_size=1`;
+        ? `${API_BASE}/dataset/${encodeURIComponent(dt)}/${encodeURIComponent(ip)}?page=1&page_size=1`
+        : `${API_BASE}/dataset/${encodeURIComponent(dt)}?page=1&page_size=1`;
       const data = await (await fetch(url)).json();
       cols = data.columns || [];
       if (cols.length) state.columns = cols;

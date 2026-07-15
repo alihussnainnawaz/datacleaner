@@ -352,7 +352,7 @@ function handleConditionUI(id) {
                 // Try uploaded file first (pre-pipeline)
                 const fileId = window._state?.fileId || (typeof state !== "undefined" && state.fileId);
                 if (fileId && colName) {
-                    const res = await fetch(`/api/upload/${fileId}/unique/${encodeURIComponent(colName)}`);
+                    const res = await fetch(`${API_BASE}/upload/${fileId}/unique/${encodeURIComponent(colName)}`);
                     if (res.ok) { const d = await res.json(); values = d.values || []; }
                 }
 
@@ -361,7 +361,7 @@ function handleConditionUI(id) {
                     const dt = (typeof state !== "undefined") && (state.cleanDataType || state.dataType);
                     const ip = (typeof state !== "undefined") && (state.cleanIpName || state.ipName || null);
                     if (dt) {
-                        const res = await fetch("/api/clean/tools/unique", {
+                        const res = await fetch(API_BASE + "/clean/tools/unique", {
                             method: "POST", headers: {"Content-Type":"application/json"},
                             body: JSON.stringify({data_type: dt, ip_name: ip, column: colName})
                         });

@@ -350,7 +350,7 @@ async function loadSheetFiltersIntoConfigs() {
     let sheet = (window.SHEET_LIST || []).find(s => s.id === activeId);
     if (!sheet || !Array.isArray(sheet.filters)) {
         try {
-            const res    = await fetch("/api/get_sheets");
+            const res    = await fetch(API_BASE + "/get_sheets");
             const sheets = await res.json();
             sheet = sheets.find(s => s.id === activeId);
         } catch (e) { return; }

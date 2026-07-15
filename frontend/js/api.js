@@ -2,7 +2,12 @@
 // Wired to: POST /api/upload/   POST /api/clean/{type}/{?ip}/{file_id}
 //           GET  /api/clean/{type}/{?ip}/{stem}/download/cleaned
 
-const API_BASE = "/api";  // relative — works on any host/port
+// Derive the deployment prefix (e.g. "" at root, or "/transformation" when
+// proxied under a sub-path) from the current page path, so API calls work
+// correctly no matter where this app is mounted. The app page is served at
+// ".../app", so stripping that trailing segment gives the base prefix.
+const APP_PREFIX = window.location.pathname.replace(/\/app\/?$/, "");
+const API_BASE = `${APP_PREFIX}/api`;  // resolves relative to current deployment prefix
 
 
 // ══════════════════════════════════════════════════════════
@@ -43,7 +48,7 @@ async function apiFetch(endpoint, options = {}) {
 // ══════════════════════════════════════════════════════════
 
 async function checkHealth() {
-  const url = `/health`;
+  const url = `${APP_PREFIX}/health`;
   try {
     const res  = await fetch(url, { headers: { "Accept": "application/json" } });
     const data = await res.json();
