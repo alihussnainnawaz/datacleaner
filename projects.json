@@ -1,0 +1,328 @@
+[
+  {
+    "id": 1,
+    "name": "Beneficiary",
+    "description": "",
+    "filters": [
+      {
+        "colIdx": 0,
+        "colName": "DA_UUID",
+        "cond": "empty",
+        "matchVal": ""
+      },
+      {
+        "colIdx": 1,
+        "colName": "DA_CNIC",
+        "cond": "empty",
+        "matchVal": ""
+      },
+      {
+        "colIdx": 2,
+        "colName": "DA Occupant Name",
+        "cond": "empty",
+        "matchVal": ""
+      },
+      {
+        "colIdx": 3,
+        "colName": "DA Father Name",
+        "cond": "empty",
+        "matchVal": ""
+      },
+      {
+        "colIdx": 4,
+        "colName": "DA Spouse Name",
+        "cond": "empty",
+        "matchVal": ""
+      },
+      {
+        "colIdx": 5,
+        "colName": "DA Type",
+        "cond": "empty",
+        "matchVal": ""
+      },
+      {
+        "colIdx": 6,
+        "colName": "DA_Damage Category",
+        "cond": "empty",
+        "matchVal": ""
+      },
+      {
+        "colIdx": 7,
+        "colName": "District",
+        "cond": "empty",
+        "matchVal": ""
+      },
+      {
+        "colIdx": 8,
+        "colName": "Tehsil",
+        "cond": "empty",
+        "matchVal": ""
+      },
+      {
+        "colIdx": 0,
+        "colName": "DA_UUID",
+        "cond": "dup",
+        "matchVal": ""
+      },
+      {
+        "colIdx": 1,
+        "colName": "DA_CNIC",
+        "cond": "dup",
+        "matchVal": ""
+      },
+      {
+        "colIdx": 46,
+        "colName": "Payment By - IFIs",
+        "cond": "empty",
+        "matchVal": ""
+      },
+      {
+        "colIdx": 9,
+        "colName": "is_hazardous_location",
+        "cond": "empty",
+        "matchVal": ""
+      },
+      {
+        "colIdx": 15,
+        "colName": "Block List",
+        "cond": "empty",
+        "matchVal": ""
+      },
+      {
+        "colIdx": 16,
+        "colName": "Disbursement Status",
+        "cond": "empty",
+        "matchVal": ""
+      },
+      {
+        "colIdx": 17,
+        "colName": "Eng Status",
+        "cond": "empty",
+        "matchVal": ""
+      }
+    ],
+    "dataType": "beneficiary",
+    "ipName": "Trdp",
+    "columnRules": {
+      "DA_UUID": [
+        "UNIQUE_VALUES",
+        "NOT_NULL"
+      ],
+      "DA_CNIC": [
+        "CNIC_FORMAT",
+        "NOT_NULL",
+        "UNIQUE_VALUES"
+      ],
+      "DA Occupant Name": [
+        "TITLE_CASED"
+      ],
+      "DA Father Name": [
+        "TITLE_CASED"
+      ],
+      "DA Spouse Name": [
+        "TITLE_CASED"
+      ],
+      "DA Type": [
+        "TITLE_CASED"
+      ],
+      "DA_Damage Category": [
+        "TITLE_CASED"
+      ],
+      "District": [],
+      "Tehsil": [],
+      "is_hazardous_location": [
+        "BOOL_STANDARDIZED"
+      ],
+      "is_located_in_flood_plain": [
+        "BOOL_STANDARDIZED"
+      ],
+      "Long": [],
+      "Lat": [],
+      "IP Name": [],
+      "Status of Land": [],
+      "Block List": [
+        "REGEX_CLEAN"
+      ],
+      "Disbursement Status": [],
+      "Eng Status": [],
+      "Gender": [
+        "GENDER_STANDARDIZED"
+      ],
+      "Marital Status": [
+        "TITLE_CASED"
+      ],
+      "Decision": [],
+      "Purged": [],
+      "Monthly Income": [],
+      "Main Source of hh Income": [
+        "REGEX_CLEAN"
+      ],
+      "Constituency No": [],
+      "Constituency": [],
+      "Winning Party": [
+        "REGEX_CLEAN"
+      ],
+      "Occupany Agreement": [],
+      "JH UC": [],
+      "JH Deh": [],
+      "EY Village": [],
+      "Cell No": [
+        "CELL_NO_NORMALIZED"
+      ],
+      "Address": [
+        "TITLE_CASED"
+      ],
+      "Widow": [],
+      "Unaccompained elders": [],
+      "Unaccompained minors i.e. orphans": [],
+      "Women with disable husband": [],
+      "Women with households Divorced / abandoned women\\n / unmarried older women dependent on others": [],
+      "Adult Female Count": [],
+      "Adult Male Count": [],
+      "Disable Adult Female Count": [],
+      "Disable Adult Male Count": [],
+      "Disable Child Female Count": [],
+      "Disable Child Male Count": [],
+      "Child Female Count": [],
+      "Child Male Count": [],
+      "Payment By - IFIs": [
+        "TITLE_CASED"
+      ]
+    },
+    "caseStyles": {
+      "DA Occupant Name": "title",
+      "DA Father Name": "title",
+      "DA Spouse Name": "title",
+      "DA Type": "title",
+      "DA_Damage Category": "title",
+      "Marital Status": "title",
+      "Address": "title",
+      "Payment By - IFIs": "upper"
+    },
+    "globalRules": {
+      "trim": true,
+      "null": true,
+      "special": true
+    },
+    "regexRules": {
+      "Block List": {
+        "auto": false,
+        "mapping": {
+          "1 A Others": "Others",
+          "1 Death Cases": "Death Cases",
+          "2 Forest Case": "Forest Cases",
+          "2.Govt Department Land": "Govt. Department Land",
+          "3.Husband & Wife Cases": "Husband & Wife Cases"
+        }
+      },
+      "Main Source of hh Income": {
+        "auto": false,
+        "mapping": {
+          "Laborer Un-skilled": "Laborer Unskilled",
+          "Un-employed": "Unemployed"
+        }
+      },
+      "Winning Party": {
+        "auto": false,
+        "mapping": {
+          "MQMP": "MQM-P"
+        }
+      }
+    },
+    "dtypeRules": {}
+  },
+  {
+    "id": 2,
+    "name": "test",
+    "description": "",
+    "filters": [
+      {
+        "colIdx": 0,
+        "colName": "Total Count",
+        "cond": "empty",
+        "matchVal": ""
+      }
+    ],
+    "dataType": "beneficiary",
+    "ipName": "test",
+    "columnRules": {
+      "Total Count": [],
+      "uuid": [],
+      "Submitted By": [],
+      "DISTRICT": [],
+      "TEHSIL": [],
+      "UC": [],
+      "Deh": [],
+      "village": [],
+      "Roof & Slope Drain": [],
+      "Type of Roof": [
+        "TITLE_CASED"
+      ],
+      "Use of Roof Insulation": [],
+      "Use of Reinforced Concrete": [],
+      "Safe Use of Any Hanging Load": [],
+      "roof_lat": [],
+      "roof_long": [],
+      "roof_over_all_certificate": [],
+      "roof_submitted_at": []
+    },
+    "caseStyles": {
+      "Type of Roof": "title"
+    },
+    "globalRules": {
+      "trim": true,
+      "null": true,
+      "special": true
+    },
+    "regexRules": {},
+    "dtypeRules": {}
+  },
+  {
+    "id": 3,
+    "name": "financials",
+    "description": "",
+    "filters": [
+      {
+        "cond": "compare2",
+        "subCond": "date",
+        "colIdx": 6,
+        "col2Idx": 20,
+        "cmpDateMode": "columns",
+        "dateCond": "date_before",
+        "uuidColIdx": 0,
+        "uuidColName": "Urban Unit #",
+        "d2UuidColIdx": 1,
+        "d2UuidColName": "uuid"
+      }
+    ],
+    "dataType": "financials",
+    "ipName": null,
+    "columnRules": {
+      "Urban Unit #": [],
+      "CNIC": [],
+      "Title of Account": [],
+      "Account Number": [],
+      "Bank Name": [],
+      "Instalment no.1": [],
+      "Chq date 1st": [],
+      "Instalment 1 Processed": [],
+      "Instalment no.2": [],
+      "Chq date 2nd": [],
+      "Instalment 2 Processed": [],
+      "Instalment no.3": [],
+      "Chq date 3rd": [],
+      "Instalment 3 Processed": [],
+      "Instalment no.4": [],
+      "4th Inst Chq Date": [],
+      "Instalment 4 Processed": []
+    },
+    "caseStyles": {},
+    "globalRules": {
+      "trim": true,
+      "null": true,
+      "special": true
+    },
+    "regexRules": {},
+    "dtypeRules": {}
+  }
+]

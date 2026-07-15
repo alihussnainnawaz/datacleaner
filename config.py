@@ -3,8 +3,8 @@ import os
 from pathlib import Path
 
 BASE_DIR   = Path(__file__).resolve().parent
-UPLOAD_DIR = BASE_DIR / "uploads"
-# Folders are created at runtime by lifespan in main.py — not at import time
+# NOTE: uploads are held in memory only (see file_handler.py) — no upload
+# directory on disk anymore.
 
 ALLOWED_EXTENSIONS  = {".xlsx", ".xls", ".csv"}
 MAX_FILE_SIZE_MB    = 500
@@ -85,10 +85,17 @@ SINDH_TEHSILS = [
 ]
 
 GEO_COLUMNS = {
+    # canonical schema names
     "district":      SINDH_DISTRICTS,
     "tehsil":        SINDH_TEHSILS,
     "union_council": SINDH_TEHSILS,
     "taluka":        SINDH_TEHSILS,
     "jh_uc":         SINDH_TEHSILS,
     "jh_deh":        SINDH_TEHSILS,
+    # all-caps / short variants seen in real uploads
+    "uc":            SINDH_TEHSILS,
+    "deh":           SINDH_TEHSILS,
+    "jh_tehsil":     SINDH_TEHSILS,
+    "jh_district":   SINDH_DISTRICTS,
+    "sub_district":  SINDH_TEHSILS,
 }

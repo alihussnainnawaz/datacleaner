@@ -1,0 +1,1682 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Data Pipeline — Clean &amp; Validate</title>
+  <link rel="stylesheet" href="/static/css/style.css" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:ital,opsz,wght@0,14..32,300;0,14..32,400;0,14..32,500;0,14..32,600;0,14..32,700;1,14..32,400&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+
+  <style>
+    /* ── Views ── */
+    .view { display:none; flex-direction:column; overflow:hidden; }
+    .view.active { display:flex; }
+    #viewUpload   { overflow-y:auto; padding:var(--content-pad); gap:20px; }
+    #viewClean    { overflow:hidden; flex-direction:column; }
+    #viewValidate { overflow-y:auto; padding:var(--content-pad); gap:20px; }
+    #viewReport   { overflow-y:auto; padding:var(--content-pad); gap:20px; }
+
+    /* ── Project cards ── */
+    .proj-section { display:flex; flex-direction:column; gap:14px; }
+    .proj-section-head { display:flex; align-items:flex-start; justify-content:space-between; gap:16px; }
+    .proj-section-label { font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.08em; color:var(--text-4); margin-bottom:2px; }
+    .proj-section-sub { font-size:12.5px; color:var(--text-3); }
+    .proj-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:12px; }
+    @media(max-width:860px){ .proj-grid{ grid-template-columns:repeat(2,1fr); } }
+    .proj-card { background:var(--bg-card); border:1.5px solid var(--border); border-radius:var(--r-lg); padding:18px 18px 14px; cursor:pointer; transition:border-color var(--t-fast),box-shadow var(--t-fast); display:flex; flex-direction:column; gap:8px; }
+    .proj-card:hover { border-color:var(--accent); box-shadow:0 0 0 3px var(--accent-glow); }
+    .proj-card.active { border-color:var(--accent); background:var(--accent-soft); }
+    .proj-card-header { display:flex; align-items:flex-start; justify-content:space-between; gap:8px; }
+    .proj-card-icon { width:34px; height:34px; border-radius:var(--r-md); background:var(--accent-soft); color:var(--accent); display:flex; align-items:center; justify-content:center; flex-shrink:0; }
+    .proj-card.active .proj-card-icon { background:var(--accent); color:#fff; }
+    .proj-card-del { opacity:0; background:none; border:none; cursor:pointer; color:var(--text-4); padding:2px 5px; border-radius:var(--r-sm); }
+    .proj-card:hover .proj-card-del { opacity:1; }
+    .proj-card-del:hover { color:var(--red); background:var(--red-dim); }
+    .proj-card-name { font-size:13.5px; font-weight:700; color:var(--text-1); margin-top:10px; }
+    .proj-card.active .proj-card-name { color:var(--accent); }
+    .proj-card-desc { font-size:12px; color:var(--text-3); line-height:1.5; }
+    .proj-card-meta { display:flex; align-items:center; gap:10px; font-size:11px; color:var(--text-4); }
+    .proj-card-pill { background:var(--bg-raised); border:1px solid var(--border); border-radius:20px; padding:2px 8px; font-size:11px; color:var(--text-3); }
+    .proj-card.active .proj-card-pill { background:rgba(37,99,235,.12); border-color:var(--accent); color:var(--accent); }
+    .proj-empty { grid-column:1/-1; display:flex; flex-direction:column; align-items:center; gap:10px; padding:40px 20px; color:var(--text-4); font-size:13px; }
+
+    /* ── Upload + config area ── */
+    .proj-upload-section { display:flex; flex-direction:column; gap:14px; }
+    .config-grid { display:grid; grid-template-columns:1fr 1fr; gap:16px; }
+    @media(max-width:860px){ .config-grid{ grid-template-columns:1fr; } }
+    .config-card { background:var(--bg-card); border:1px solid var(--border); border-radius:var(--r-lg); padding:22px 24px; display:flex; flex-direction:column; gap:16px; }
+    .config-card-title { font-size:11px; font-weight:700; letter-spacing:.08em; text-transform:uppercase; color:var(--text-3); }
+    .config-field { display:flex; flex-direction:column; gap:7px; }
+    .config-label { font-size:11.5px; font-weight:600; color:var(--text-2); }
+    .config-label .config-hint { font-weight:400; color:var(--text-4); margin-left:6px; font-size:11px; }
+    .text-input { width:100%; padding:9px 12px; background:var(--bg-raised); border:1px solid var(--border-mid); border-radius:var(--r-md); color:var(--text-1); font-size:13px; font-family:var(--font-ui); }
+    .text-input:focus { outline:none; border-color:var(--accent); }
+    .text-input::placeholder { color:var(--text-4); }
+    .ip-name-group { display:none; flex-direction:column; gap:7px; }
+    .type-tiles { display:grid; grid-template-columns:repeat(2,1fr); gap:8px; }
+    .type-tile { padding:12px 14px; border-radius:var(--r-md); cursor:pointer; border:1.5px solid var(--border-mid); background:var(--bg-raised); display:flex; flex-direction:column; gap:3px; transition:border-color var(--t-fast),background var(--t-fast); user-select:none; }
+    .type-tile:hover { border-color:var(--accent); background:var(--accent-glow); }
+    .type-tile.selected { border-color:var(--accent); background:var(--accent-glow); }
+    .type-tile-name { font-size:12.5px; font-weight:650; color:var(--text-1); }
+    .type-tile-desc { font-size:11px; color:var(--text-3); line-height:1.4; }
+    .type-tile.selected .type-tile-name { color:var(--accent); }
+    .run-bar { display:flex; align-items:center; justify-content:space-between; gap:16px; padding:16px 20px; background:var(--bg-card); border:1px solid var(--border); border-radius:var(--r-lg); }
+    .run-bar-info { font-size:12.5px; color:var(--text-3); line-height:1.5; }
+    .run-bar-info strong { color:var(--text-1); display:block; font-size:13.5px; margin-bottom:2px; }
+    .btn-primary:disabled { opacity:.45; cursor:not-allowed; }
+
+    /* Validation trigger */
+    .val-trigger-row { display:flex; align-items:center; gap:12px; flex-wrap:wrap; }
+    .btn-val-trigger { display:inline-flex; align-items:center; gap:8px; padding:9px 16px; background:var(--bg-card); border:1.5px solid var(--border-mid); border-radius:var(--r-lg); color:var(--text-2); font-size:12.5px; font-weight:500; font-family:var(--font-ui); cursor:pointer; transition:border-color var(--t-fast),color var(--t-fast),background var(--t-fast); }
+    .btn-val-trigger:hover,.btn-val-trigger.has-filters { border-color:var(--accent); color:var(--accent); background:var(--accent-soft); }
+    .val-trigger-badge { background:var(--accent); color:#fff; font-size:10.5px; font-weight:700; padding:1px 7px; border-radius:20px; }
+    .val-filter-note { font-size:12px; color:var(--text-3); }
+
+    /* ══ VALIDATION FILTERS POPUP ══ */
+    .val-popup-overlay { position:fixed; inset:0; background:rgba(15,23,42,.3); backdrop-filter:blur(4px); z-index:600; display:none; align-items:center; justify-content:center; padding:24px; }
+    .val-popup-overlay.open { display:flex; }
+    .val-popup { background:var(--bg-card); border:1px solid var(--border-mid); border-radius:var(--r-xl); width:100%; max-width:900px; max-height:88vh; display:flex; flex-direction:column; overflow:hidden; box-shadow:0 24px 64px rgba(0,0,0,.18); }
+    .val-popup-header { display:flex; align-items:center; justify-content:space-between; padding:16px 22px; border-bottom:1px solid var(--border); flex-shrink:0; }
+    .val-popup-title { font-size:14px; font-weight:700; color:var(--text-1); }
+    .val-popup-sub { font-size:11.5px; color:var(--text-3); margin-top:2px; }
+    .fp-filters-sticky { flex-shrink:0; padding:14px 22px 12px; background:var(--bg-raised); border-bottom:1px solid var(--border); }
+    .fp-palette-sticky { display:flex; flex-direction:column; gap:8px; }
+    .fp-category-row { display:flex; align-items:center; gap:10px; flex-wrap:wrap; }
+    .fp-category-label { font-size:10.5px; font-weight:700; text-transform:uppercase; letter-spacing:.07em; color:var(--text-4); white-space:nowrap; }
+    .fp-category-tabs { display:flex; gap:5px; flex-wrap:wrap; }
+    .fp-cat-tab { padding:4px 12px; border-radius:20px; border:1.5px solid var(--border-mid); background:var(--bg-raised); font-size:12px; font-weight:500; color:var(--text-3); cursor:pointer; transition:border-color var(--t-fast),background var(--t-fast),color var(--t-fast); white-space:nowrap; }
+    .fp-cat-tab:hover { border-color:var(--accent); color:var(--accent); background:var(--accent-soft); }
+    .fp-cat-tab.active { border-color:var(--accent); background:var(--accent); color:#fff; font-weight:600; }
+    .fp-palette-hint { font-size:11px; color:var(--text-4); margin-left:auto; white-space:nowrap; }
+    .fp-bubble-strip { display:flex; flex-wrap:wrap; gap:6px; min-height:32px; align-items:center; }
+    .fp-bubble { display:inline-flex; align-items:center; gap:5px; padding:4px 12px; border-radius:20px; border:1.5px solid; font-size:12px; font-weight:600; cursor:grab; user-select:none; white-space:nowrap; }
+    .fp-bubble:hover { box-shadow:var(--shadow-sm); transform:translateY(-1px); }
+    .fp-bubble.dragging { opacity:.5; cursor:grabbing; }
+    .fp-filters-scroll { flex:1; overflow-y:auto; padding:16px 22px; display:flex; flex-direction:column; gap:14px; scrollbar-width:thin; }
+    .fp-col-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:10px; align-items:start; }
+    @media(max-width:700px){ .fp-col-grid{ grid-template-columns:repeat(2,1fr); } }
+    .fp-col-card { background:var(--bg); border:1.5px solid var(--border); border-radius:var(--r-lg); overflow:hidden; transition:border-color var(--t-fast),box-shadow var(--t-fast); }
+    .fp-col-card.fp-drop-over { border-color:var(--accent); box-shadow:0 0 0 3px var(--accent-glow); }
+    .fp-col-head { display:flex; align-items:center; justify-content:space-between; gap:6px; padding:7px 10px; background:var(--bg-raised); border-bottom:1px solid var(--border); }
+    .fp-col-name { font-size:11.5px; font-weight:600; color:var(--text-2); font-family:var(--font-mono); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; flex:1; min-width:0; }
+    .fp-col-badge { display:none; align-items:center; background:var(--accent); color:#fff; font-size:9.5px; font-weight:700; padding:1px 6px; border-radius:20px; flex-shrink:0; }
+    .fp-col-zone { display:flex; flex-wrap:wrap; gap:5px; padding:8px 10px; min-height:42px; align-items:flex-start; }
+    .fp-col-drop-hint { font-size:10.5px; color:var(--text-4); width:100%; text-align:center; border:1.5px dashed var(--border-mid); border-radius:var(--r-sm); padding:5px 0; pointer-events:none; }
+    .fp-col-bubble { display:inline-flex; align-items:center; gap:4px; padding:3px 8px; border-radius:14px; border:1.5px solid; font-size:11px; font-weight:600; white-space:nowrap; cursor:pointer; }
+    .fp-col-bubble-x { border:none; background:none; cursor:pointer; font-size:13px; line-height:1; padding:0 1px; opacity:.5; }
+    .fp-col-bubble-x:hover { opacity:1; }
+    .fp-rule-store { display:none; }
+    .fp-general-strip { display:flex; flex-wrap:wrap; gap:6px; align-items:center; padding:10px 12px; border:1.5px dashed var(--border-mid); border-radius:var(--r-lg); background:var(--bg-raised); }
+    .fp-popup-footer { display:flex; align-items:center; justify-content:space-between; gap:12px; padding:14px 22px; border-top:1px solid var(--border); flex-shrink:0; }
+    .fp-filter-count { font-size:12.5px; color:var(--text-3); }
+    .fp-filter-count strong { color:var(--text-1); }
+    .fp-modal-overlay { opacity:0; pointer-events:none; transition:opacity var(--t-fast); z-index:700; }
+    .fp-modal-overlay.open { opacity:1; pointer-events:auto; }
+    #fpModalOverlay { z-index:700; }
+    .fp-modal { max-width:440px; }
+    .modal-sub { font-size:11.5px; color:var(--text-3); margin-top:3px; }
+    body.fp-modal-lock { overflow:hidden; }
+
+    /* Rule cards inside filter config */
+    .rule-card { position:relative; border:1px solid var(--border); border-radius:var(--r-lg); padding:14px 16px 14px 48px; margin-bottom:12px; background:var(--bg-card); }
+    .rule-remove { position:absolute; top:50%; left:12px; transform:translateY(-50%); width:24px; height:24px; border-radius:50%; background:var(--red-dim); color:var(--red); font-size:14px; cursor:pointer; display:flex; align-items:center; justify-content:center; border:1px solid var(--red-border); }
+    .rule-remove:hover { background:var(--red); color:#fff; }
+    .rule-grid { display:flex; flex-wrap:nowrap; gap:10px; align-items:center; overflow-x:auto; min-width:max-content; }
+    .rule-field { flex:0 0 180px; width:180px; }
+    .rule-field select,.rule-field input { width:100%; height:36px; border:1px solid var(--border-mid); border-radius:var(--r-md); padding:0 10px; font-size:13px; background:var(--bg-raised); color:var(--text-1); outline:none; }
+    .ds2-hint { width:100%; min-height:36px; display:flex; align-items:center; padding:0 10px; border:1px dashed var(--border-mid); border-radius:var(--r-md); background:var(--bg-raised); color:var(--text-3); font-size:12px; line-height:1.3; }
+    .rule-field select:focus,.rule-field input:focus { border-color:var(--accent); }
+    .dynamic-field { flex:0 0 180px; }
+    .subfilters-wrap { width:100%; margin-top:10px; }
+    .subfilter { display:flex; flex-wrap:nowrap; gap:10px; align-items:center; margin-bottom:8px; }
+    .subfilter .rule-field { flex:0 0 180px; }
+    .sub-remove-btn { flex:0 0 auto; background:none; border:1px solid var(--red); color:var(--red); border-radius:50%; width:26px; height:26px; font-size:13px; cursor:pointer; display:flex; align-items:center; justify-content:center; }
+    .sub-remove-btn:hover { background:var(--red); color:#fff; }
+    .sub-add-btn { margin-top:8px; padding:5px 14px; border-radius:20px; border:1.5px dashed var(--accent); background:transparent; color:var(--accent); font-size:12.5px; cursor:pointer; }
+    .sub-add-btn:hover { background:var(--accent); color:#fff; }
+    .col-combo-wrap { position:relative; width:100%; }
+    .col-combo-input { width:100%; height:36px; border:1px solid var(--border-mid); border-radius:var(--r-md); padding:0 10px; font-size:13px; background:var(--bg-raised); color:var(--text-1); outline:none; }
+    .col-combo-input:focus { border-color:var(--accent); }
+    .col-combo-input.has-value { border-color:var(--accent); color:var(--accent); font-weight:500; }
+    .col-combo-list { position:fixed; background:var(--bg-card); border:1px solid var(--border); border-radius:var(--r-md); max-height:200px; overflow-y:auto; z-index:99999; list-style:none; margin:0; padding:4px 0; box-shadow:var(--shadow-md); min-width:180px; }
+    .col-combo-list li { padding:7px 12px; font-size:13px; color:var(--text-1); cursor:pointer; white-space:nowrap; }
+    .col-combo-list li:hover,.col-combo-list li.selected { background:var(--bg-hover); color:var(--accent); }
+    .col-combo-list li mark { background:var(--accent-soft); color:var(--accent); border-radius:2px; }
+    .col-combo-empty { padding:9px 12px; font-size:12px; color:var(--text-4); font-style:italic; cursor:default!important; }
+    .col-combo-empty:hover { background:transparent!important; }
+    .date-input { width:100%; padding:7px 10px; border:1px solid var(--border-mid); border-radius:var(--r-md); font-size:13px; color:var(--text-1); background:var(--bg-raised); outline:none; }
+    .date-input:focus { border-color:var(--accent); }
+    #fpModalBody .rule-card { position:static; border:none; background:transparent; padding:0; margin:0; }
+    #fpModalBody .rule-remove { display:none; }
+    #fpModalBody .rule-grid { display:flex; flex-direction:column; gap:12px; overflow:visible; min-width:0; }
+    #fpModalBody .rule-field,#fpModalBody .dynamic-field,#fpModalBody .col-combo-wrap { flex:1 1 auto; width:100%; }
+    #fpModalBody .rule-field select,#fpModalBody .rule-field input,#fpModalBody .col-combo-input { width:100%; }
+    #fpModalBody .subfilters-wrap { width:100%; }
+    #fpModalBody .subfilter { flex-wrap:wrap; gap:8px; }
+    #fpModalBody .subfilter .rule-field { flex:1 1 100%; }
+    .combo-dropdown { display:none; }
+
+    /* ── Clean view pagination (now lives inside dataset-footer) ── */
+    .clean-page-btn { padding:5px 12px; border:1px solid var(--border-mid); border-radius:var(--r-md); background:var(--bg-card); color:var(--text-2); font-size:12.5px; cursor:pointer; }
+    .clean-page-btn:hover { border-color:var(--accent); color:var(--accent); }
+    .clean-page-btn:disabled { opacity:.4; cursor:default; }
+    .clean-page-info { font-size:12px; color:var(--text-3); white-space:nowrap; }
+    .clean-file-badge { font-size:11px; color:var(--text-4); font-family:var(--font-mono); }
+
+    /* ── Validate view enhancements ── */
+    .val-view-toggle { display:flex; gap:6px; margin-bottom:12px; }
+    .val-view-btn { padding:6px 16px; border-radius:var(--r-md); border:1px solid var(--border-mid); background:var(--bg-card); color:var(--text-3); font-size:12.5px; cursor:pointer; font-weight:500; transition:all 0.15s; }
+    .val-view-btn.active { background:var(--accent-soft); border-color:var(--accent); color:var(--accent); font-weight:600; }
+    .val-count-badge { display:inline-flex; align-items:center; justify-content:center; min-width:18px; height:18px; padding:0 5px; background:var(--red,#ef4444); color:#fff; border-radius:9px; font-size:10px; font-weight:700; margin-left:5px; vertical-align:middle; }
+    .val-status-pass { color:var(--green); font-weight:600; font-size:11px; }
+    .val-status-fail { color:var(--red); font-weight:600; font-size:11px; }
+    .val-rule-chip { display:inline-block; padding:1px 7px; background:rgba(239,68,68,0.10); color:var(--red,#ef4444); border-radius:4px; font-size:11px; margin:1px 2px; border:1px solid rgba(239,68,68,0.25); }
+    .val-rule-ok { display:inline-block; padding:1px 7px; background:rgba(16,185,129,0.10); color:var(--green); border-radius:4px; font-size:11px; margin:1px 2px; border:1px solid rgba(16,185,129,0.25); }
+    .rval-pass { color:var(--green); font-weight:600; }
+    .rval-fail { color:var(--red); font-weight:600; }
+    /* ── Record cards ── */
+    .record-card { border:1px solid var(--border); border-radius:var(--r-lg); padding:14px 16px; margin-bottom:12px; background:var(--bg-card); }
+    .record-card.has-fail { border-left:3px solid var(--red); }
+    .record-card.has-review { border-left:3px solid var(--yellow,#f59e0b); }
+    .record-card.all-pass { border-left:3px solid var(--green); }
+    .record-head { display:flex; align-items:center; gap:10px; margin-bottom:10px; flex-wrap:wrap; }
+    .record-uuid { font-family:var(--font-mono); font-size:12px; font-weight:700; color:var(--text-1); }
+    .record-status-badge { padding:2px 10px; border-radius:20px; font-size:11px; font-weight:700; }
+    .record-status-badge.pass { background:rgba(16,185,129,0.12); color:var(--green); }
+    .record-status-badge.fail { background:rgba(239,68,68,0.12); color:var(--red); }
+    .record-status-badge.review { background:rgba(245,158,11,0.12); color:var(--yellow,#f59e0b); }
+    .record-section { margin-top:10px; }
+    .record-section-title { font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:.06em; color:var(--text-4); margin-bottom:6px; }
+    .record-col-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(240px,1fr)); gap:8px; }
+    .record-col-item { padding:8px 10px; border-radius:var(--r-md); border:1px solid var(--border); background:var(--bg); font-size:12px; }
+    .record-col-item.cleaned { border-color:rgba(16,185,129,0.3); background:rgba(16,185,129,0.06); }
+    .record-col-item.review  { border-color:rgba(245,158,11,0.3);  background:rgba(245,158,11,0.06); }
+    .record-col-item.fail    { border-color:rgba(239,68,68,0.3);   background:rgba(239,68,68,0.06); }
+    .record-col-name { font-weight:600; color:var(--text-2); margin-bottom:3px; }
+    .record-col-val  { color:var(--text-1); word-break:break-all; }
+    .record-col-step { font-size:10px; color:var(--text-4); font-family:var(--font-mono); margin-top:2px; }
+    .record-col-old  { font-size:10px; color:var(--text-3); text-decoration:line-through; margin-top:1px; }
+    .record-val-check { display:flex; align-items:center; gap:6px; margin-top:4px; font-size:11px; }
+    .record-val-check.pass { color:var(--green); }
+    .record-val-check.fail { color:var(--red); }
+
+    /* ── Pipeline clean/review cell highlights ── */
+    td.cell-auto-cleaned {
+      background: rgba(16,185,129,0.10) !important;
+      color: var(--text-1) !important;
+      outline: 1.5px solid rgba(16,185,129,0.30);
+      outline-offset: -1px;
+      position: relative;
+    }
+    td.cell-needs-review {
+      background: rgba(245,158,11,0.10) !important;
+      color: var(--text-1) !important;
+      outline: 1.5px solid rgba(245,158,11,0.35);
+      outline-offset: -1px;
+      position: relative;
+    }
+    .cell-clean-badge {
+      position: absolute; top: 2px; right: 3px;
+      font-size: 9px; color: #10b981; opacity: 0.8;
+      pointer-events: none;
+    }
+    .cell-review-badge {
+      position: absolute; top: 2px; right: 3px;
+      font-size: 9px; color: #f59e0b; font-weight: 700; opacity: 0.9;
+      pointer-events: none;
+    }
+    /* Make the td position:relative so badges work */
+    .dataset-table td { position: relative; }
+
+    /* Flag summary chip colors */
+    .flag-count-chip--green  { background:rgba(16,185,129,0.12); color:#10b981; border:1px solid rgba(16,185,129,0.3); }
+    .flag-count-chip--yellow { background:rgba(245,158,11,0.12); color:#f59e0b; border:1px solid rgba(245,158,11,0.3); }
+
+    /* ── Regex auto-clean highlights ── */
+    td.regex-changed {
+      background: var(--green-dim, rgba(16,185,129,0.12)) !important;
+      color: var(--green, #10b981) !important;
+      outline: 1.5px solid rgba(16,185,129,0.35);
+      outline-offset: -1px;
+      position: relative;
+    }
+    td.regex-changed::after {
+      content: '✓';
+      position: absolute;
+      top: 2px; right: 4px;
+      font-size: 9px;
+      color: var(--green, #10b981);
+      opacity: 0.7;
+    }
+    td.regex-review {
+      background: var(--yellow-dim, rgba(245,158,11,0.12)) !important;
+      color: var(--yellow, #f59e0b) !important;
+      outline: 1.5px solid rgba(245,158,11,0.35);
+      outline-offset: -1px;
+      position: relative;
+    }
+    td.regex-review::after {
+      content: '?';
+      position: absolute;
+      top: 2px; right: 4px;
+      font-size: 9px;
+      color: var(--yellow, #f59e0b);
+      opacity: 0.8;
+    }
+
+    /* ── Validate view ── */
+    .validate-header { display:flex; align-items:flex-start; justify-content:space-between; gap:16px; flex-wrap:wrap; flex-shrink:0; }
+    .val-stat-row { display:grid; grid-template-columns:repeat(3,1fr); gap:12px; }
+    @media(max-width:860px){ .val-stat-row{ grid-template-columns:1fr; } }
+    .val-breakdown-card { background:var(--bg-card); border:1px solid var(--border); border-radius:var(--r-lg); padding:18px 20px; display:flex; flex-direction:column; gap:12px; }
+    .val-breakdown-title { font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.07em; color:var(--text-3); }
+    .val-filter-row { display:flex; align-items:center; justify-content:space-between; padding:8px 0; border-bottom:1px solid var(--border); font-size:12.5px; gap:12px; }
+    .val-filter-row:last-child { border-bottom:none; }
+    .val-filter-label { color:var(--text-2); flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+    .val-badge-pass { background:var(--green-dim); color:var(--green); font-size:11px; font-weight:600; padding:2px 8px; border-radius:20px; white-space:nowrap; }
+    .val-badge-fail { background:var(--red-dim); color:var(--red); font-size:11px; font-weight:600; padding:2px 8px; border-radius:20px; white-space:nowrap; }
+    .val-table-card { background:var(--bg-card); border:1px solid var(--border); border-radius:var(--r-lg); overflow:visible; display:flex; flex-direction:column; }
+    .val-table-header { display:flex; align-items:center; justify-content:space-between; padding:12px 16px; border-bottom:1px solid var(--border); gap:12px; flex-wrap:wrap; }
+    .val-table-title { font-size:13px; font-weight:600; color:var(--text-1); }
+    .val-table-search { padding:6px 10px; border:1px solid var(--border-mid); border-radius:var(--r-md); font-size:12.5px; background:var(--bg-raised); color:var(--text-1); outline:none; width:200px; }
+    .val-table-search:focus { border-color:var(--accent); }
+    .val-table-scroll { overflow-x:auto; overflow-y:auto; max-height:520px; }
+    .val-data-table { border-collapse:collapse; width:100%; font-size:12.5px; }
+    .val-data-table th { background:var(--bg-raised); color:var(--text-3); font-weight:600; font-size:11px; letter-spacing:.04em; text-transform:uppercase; padding:10px 14px; text-align:left; border-bottom:1px solid var(--border); white-space:nowrap; }
+    .val-data-table td { padding:8px 14px; border-bottom:1px solid var(--border); color:var(--text-2); font-size:12px; vertical-align:middle; }
+    .val-data-table td:first-child { font-family:var(--font-mono); }
+    .val-data-table tbody tr:hover td { background:var(--bg-hover); }
+    .val-row-num { color:var(--text-4); font-size:11px; text-align:right; width:52px; }
+    .val-status-fail { color:var(--red); font-weight:600; }
+    .val-filter-chip { display:inline-flex; padding:2px 7px; border-radius:12px; font-size:11px; font-weight:500; background:var(--red-dim); color:var(--red); border:1px solid rgba(220,38,38,.2); white-space:nowrap; margin:1px; }
+    .val-pagination { display:flex; align-items:center; justify-content:center; gap:8px; padding:14px; border-top:1px solid var(--border); }
+    .val-page-btn { padding:5px 12px; border:1px solid var(--border-mid); border-radius:var(--r-md); background:var(--bg-card); color:var(--text-2); font-size:12.5px; cursor:pointer; }
+    .val-page-btn:hover { border-color:var(--accent); color:var(--accent); }
+    .val-page-btn:disabled { opacity:.4; cursor:default; }
+    .val-page-info { font-size:12px; color:var(--text-3); }
+    .validate-empty { flex:1; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:12px; padding:48px; color:var(--text-4); font-size:13px; text-align:center; }
+    .validate-empty strong { color:var(--text-3); }
+
+    /* ── Validation-fail cell + row highlights (used by Run Filters table) ── */
+    td.flag-val-fail {
+      background: rgba(239,68,68,0.08) !important;
+      color: var(--text-1) !important;
+      outline: 1.5px solid rgba(239,68,68,0.30);
+      outline-offset: -1px;
+      position: relative;
+    }
+    .cell-val-fail-badge {
+      position: absolute; top: 2px; right: 3px;
+      font-size: 9px; color: #ef4444; font-weight: 700; opacity: 0.85;
+      pointer-events: none;
+    }
+    tr.val-row-failed > td:first-child {
+      border-left: 3px solid var(--red, #ef4444);
+    }
+
+    /* ── Validate view — highlighted dataset table (mirrors Clean section) ── */
+    .val-dataset-wrap { overflow-x: auto; overflow-y: auto; max-height: 520px; }
+    .val-dataset-table { border-collapse: collapse; width: 100%; font-size: 12px; }
+    .val-dataset-table th {
+      background: var(--bg-raised); color: var(--text-3); font-weight: 600;
+      font-size: 10.5px; letter-spacing: .04em; text-transform: uppercase;
+      padding: 8px 10px; text-align: left; border-bottom: 1px solid var(--border);
+      white-space: nowrap; position: sticky; top: 0; z-index: 1;
+    }
+    .val-dataset-table td {
+      padding: 6px 10px; border-bottom: 1px solid var(--border);
+      color: var(--text-2); vertical-align: middle; position: relative;
+    }
+    .val-dataset-table tbody tr:hover td { background: var(--bg-hover); }
+    .val-dataset-table td:first-child { font-family: var(--font-mono); color: var(--text-4); font-size: 11px; text-align: right; width: 44px; }
+
+    /* ── Inline dataset filter bar ─────────────────────────────────────── */
+    .val-inline-filter { padding: 10px 16px; border-bottom: 1px solid var(--border); background: var(--bg-raised); }
+    .vif-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+    .vif-select {
+      height: 34px; padding: 0 10px; border: 1px solid var(--border-mid);
+      border-radius: var(--r-md); background: var(--bg-card); color: var(--text-1);
+      font-size: 12.5px; font-family: var(--font-ui); outline: none; cursor: pointer;
+      min-width: 140px;
+    }
+    .vif-select:focus { border-color: var(--accent); }
+    .vif-input {
+      height: 34px; padding: 0 10px; border: 1px solid var(--border-mid);
+      border-radius: var(--r-md); background: var(--bg-card); color: var(--text-1);
+      font-size: 12.5px; font-family: var(--font-ui); outline: none; min-width: 140px;
+    }
+    .vif-input:focus { border-color: var(--accent); }
+    .vif-btn {
+      height: 34px; padding: 0 14px; border-radius: var(--r-md);
+      font-size: 12.5px; font-weight: 600; font-family: var(--font-ui);
+      cursor: pointer; border: 1.5px solid; white-space: nowrap;
+    }
+    .vif-btn--apply { background: var(--accent); color: #fff; border-color: var(--accent); }
+    .vif-btn--apply:hover { opacity: .88; }
+    .vif-btn--clear { background: transparent; color: var(--text-3); border-color: var(--border-mid); }
+    .vif-btn--clear:hover { border-color: var(--red); color: var(--red); }
+    .vif-count { font-size: 12px; color: var(--text-3); white-space: nowrap; margin-left: 4px; }
+
+    /* Run Filters button */
+    .btn-run-filters {
+      display: inline-flex; align-items: center; gap: 7px;
+      padding: 9px 18px; border-radius: var(--r-lg);
+      background: var(--accent-soft); border: 1.5px solid var(--accent);
+      color: var(--accent); font-size: 13px; font-weight: 600;
+      font-family: var(--font-ui); cursor: pointer;
+      transition: background var(--t-fast), color var(--t-fast);
+    }
+    .btn-run-filters:hover { background: var(--accent); color: #fff; }
+    .btn-run-filters:disabled { opacity: .45; cursor: not-allowed; }
+  </style>
+</head>
+<body>
+
+  <!-- ══ SIDEBAR ══════════════════════════════════════════════ -->
+  <aside class="sidebar">
+    <div class="sidebar-brand">
+      <div class="brand-mark">
+        <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
+          <path d="M2 2h6v6H2z" fill="var(--accent)"/>
+          <path d="M10 2h6v6h-6z" fill="var(--accent)" opacity=".35"/>
+          <path d="M2 10h6v6H2z" fill="var(--accent)" opacity=".35"/>
+          <path d="M10 10h6v6h-6z" fill="var(--accent)" opacity=".65"/>
+        </svg>
+      </div>
+      <div class="brand-text">
+        <span class="brand-name">DataPipeline</span>
+        <span class="brand-ver">v3.0</span>
+      </div>
+    </div>
+    <div class="nav-section">
+      <p class="nav-label">Pipeline</p>
+      <nav class="sidebar-nav">
+        <a class="nav-item active" data-view="upload" href="#">
+          <svg class="nav-icon" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6">
+            <path d="M10 13V4M6 7l4-4 4 4" stroke-linecap="round" stroke-linejoin="round"/>
+            <path d="M3 14v1a2 2 0 002 2h10a2 2 0 002-2v-1" stroke-linecap="round"/>
+          </svg>
+          <span>Upload</span><span class="nav-step">01</span>
+        </a>
+        <a class="nav-item" data-view="clean" href="#">
+          <svg class="nav-icon" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6">
+            <path d="M4 6h12M4 10h8M4 14h5" stroke-linecap="round"/>
+            <circle cx="15" cy="13" r="3"/><path d="M17.5 15.5l1.5 1.5" stroke-linecap="round"/>
+          </svg>
+          <span>Clean</span><span class="nav-step">02</span>
+        </a>
+        <a class="nav-item" data-view="validate" href="#">
+          <svg class="nav-icon" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6">
+            <path d="M10 2l7 3v5c0 4.5-3 7.5-7 9-4-1.5-7-4.5-7-9V5l7-3z" stroke-linecap="round" stroke-linejoin="round"/>
+            <path d="M7 10l2 2 4-4" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+          <span>Validate</span><span class="nav-step">03</span>
+        </a>
+        <a class="nav-item" data-view="report" href="#">
+          <svg class="nav-icon" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6">
+            <rect x="3" y="3" width="14" height="14" rx="2"/>
+            <path d="M7 14V10M10 14V7M13 14V11" stroke-linecap="round"/>
+          </svg>
+          <span>Report</span><span class="nav-step">04</span>
+        </a>
+      </nav>
+    </div>
+    <div class="sidebar-footer">
+      <div class="file-chip" id="sidebarFileChip" style="display:none">
+        <svg width="11" height="11" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M4 4h7l5 5v7a1 1 0 01-1 1H4a1 1 0 01-1-1V5a1 1 0 011-1z"/>
+          <path d="M11 4v5h5"/>
+        </svg>
+        <span id="sidebarFilename">No file</span>
+      </div>
+      <div class="pipeline-status">
+        <span class="status-dot" id="statusDot"></span>
+        <span class="status-text" id="statusText">Awaiting file</span>
+      </div>
+    </div>
+  </aside>
+
+
+  <!-- ══ MAIN ═════════════════════════════════════════════════ -->
+  <main class="main">
+    <header class="topbar">
+      <div class="topbar-left">
+        <h1 class="page-title" id="pageTitle">Upload</h1>
+        <p class="page-sub" id="pageSub">Select a project, upload your data, and run the pipeline</p>
+      </div>
+      <div class="topbar-right">
+        <div class="topbar-file" id="topbarFile" style="display:none">
+          <svg width="12" height="12" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M4 4h7l5 5v7a1 1 0 01-1 1H4a1 1 0 01-1-1V5a1 1 0 011-1z"/>
+            <path d="M11 4v5h5"/>
+          </svg>
+          <span id="topbarFilename">—</span>
+        </div>
+        <button class="btn-ghost" id="clearBtn" onclick="clearSession()" style="display:none">Clear session</button>
+      </div>
+    </header>
+
+
+    <!-- ══ VIEW 01 — UPLOAD ══════════════════════════════════ -->
+    <section class="view active" id="viewUpload">
+
+      <!-- Projects -->
+      <div class="proj-section">
+        <div class="proj-section-head">
+          <div>
+            <p class="proj-section-label">Projects</p>
+            <p class="proj-section-sub">Each project stores cleaning type, IP name, and validation filters — reuse across datasets</p>
+          </div>
+          <button class="btn-primary" onclick="openNewProjModal()">
+            <svg width="13" height="13" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2.4">
+              <path d="M10 4v12M4 10h12" stroke-linecap="round"/>
+            </svg>
+            New Project
+          </button>
+        </div>
+        <div class="proj-grid" id="projGrid">
+          <div class="proj-empty" id="projEmpty">
+            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.2" opacity=".25">
+              <rect x="3" y="3" width="18" height="18" rx="3"/><path d="M12 8v8M8 12h8"/>
+            </svg>
+            <p>No projects yet — create one to begin</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- Upload + config (shown after project selected) -->
+      <div class="proj-upload-section" id="uploadSection" style="display:none">
+        <div class="proj-section-head">
+          <div>
+            <p class="proj-section-label">Dataset</p>
+            <p class="proj-section-sub">Upload the file to run through <strong id="activeProjectName">—</strong>'s pipeline</p>
+          </div>
+        </div>
+
+        <div class="upload-wrap">
+          <div class="upload-zone" id="uploadZone">
+            <input type="file" id="fileInput" accept=".xlsx,.xls,.csv" hidden />
+            <div class="upload-body">
+              <div class="upload-glyph">
+                <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4">
+                  <path d="M12 15V4M8 7l4-4 4 4" stroke-linecap="round" stroke-linejoin="round"/>
+                  <path d="M4 17v1a2 2 0 002 2h12a2 2 0 002-2v-1" stroke-linecap="round"/>
+                </svg>
+              </div>
+              <p class="upload-heading">Drop your Excel or CSV file here</p>
+              <p class="upload-sub">or <button class="upload-browse" onclick="document.getElementById('fileInput').click()">browse files</button></p>
+              <p class="upload-hint">.xlsx · .xls · .csv · up to 500 MB</p>
+            </div>
+          </div>
+          <div class="file-card" id="fileCard" style="display:none">
+            <div class="file-card-left">
+              <div class="file-card-icon">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6">
+                  <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/>
+                  <polyline points="14 2 14 8 20 8"/>
+                </svg>
+              </div>
+              <div class="file-card-meta">
+                <p class="file-card-name" id="fileCardName">—</p>
+                <p class="file-card-stats" id="fileCardStats">—</p>
+              </div>
+            </div>
+            <div class="file-card-ds2" id="fileCardDs2">
+              <button type="button" class="btn-outline btn-sm" id="ds2UploadBtn"
+                      onclick="if (typeof triggerDataset2Upload === 'function') triggerDataset2Upload()"
+                      title="Upload a second dataset once — every Cross Check / Double Cross Check validation filter reuses it, no need to upload it again per filter">
+                + Dataset 2
+              </button>
+            </div>
+            <span class="badge badge-green">Ready</span>
+          </div>
+        </div>
+
+        <!-- Cleaning + Settings cards -->
+        <div class="config-grid" id="configGrid" style="display:none">
+          <div class="config-card">
+            <p class="config-card-title">Cleaning — Dataset Type</p>
+            <div class="config-field">
+              <label class="config-label">What kind of data is this?</label>
+              <div class="type-tiles">
+                <div class="type-tile" data-type="beneficiary"  onclick="selectType(this,'beneficiary')"><span class="type-tile-name">Beneficiary</span><span class="type-tile-desc">TRDP / NRSP household records</span></div>
+                <div class="type-tile" data-type="certificates" onclick="selectType(this,'certificates')"><span class="type-tile-name">Certificates</span><span class="type-tile-desc">Plinth / Lintel / Roof inspection</span></div>
+                <div class="type-tile" data-type="banks"        onclick="selectType(this,'banks')"><span class="type-tile-name">Banks</span><span class="type-tile-desc">Disbursement &amp; IBAN records</span></div>
+                <div class="type-tile" data-type="financials"   onclick="selectType(this,'financials')"><span class="type-tile-name">Financials</span><span class="type-tile-desc">Tranche status &amp; financial data</span></div>
+              </div>
+            </div>
+            <div class="ip-name-group" id="ipNameGroup">
+              <label class="config-label" for="ipNameInput">Organisation / IP name <span class="config-hint">subfolder &amp; file stem</span></label>
+              <input type="text" id="ipNameInput" class="text-input" placeholder="e.g. TRDP, SRSO, HANDS…" oninput="onIpNameInput(this.value)" />
+            </div>
+          </div>
+
+          <div class="config-card">
+            <p class="config-card-title">Settings</p>
+            <div class="config-field">
+              <label class="config-label" for="uuidColumnSelect">UUID / ID column <span class="config-hint">for duplicate detection</span></label>
+              <select class="select-input" id="uuidColumnSelect" onchange="onUuidColumnChange(this.value)">
+                <option value="">— none —</option>
+              </select>
+            </div>
+            <div id="recoTriggerBar" class="reco-trigger-row" style="display:none">
+              <button class="btn-reco-trigger" id="recoTriggerBtn" onclick="openRecoModal()">
+                <svg width="13" height="13" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2">
+                  <rect x="3" y="3" width="14" height="14" rx="2"/>
+                  <path d="M7 10h6M7 7h6M7 13h3" stroke-linecap="round"/>
+                </svg>
+                Column Rules
+                <span class="reco-trigger-badge" id="recoTriggerCount"></span>
+              </button>
+              <span class="val-filter-note" id="recoFilterNote">No rules</span>
+            </div>
+            <div class="val-trigger-row">
+              <button class="btn-val-trigger" id="valTriggerBtn" onclick="openValPopup()">
+                <svg width="13" height="13" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M3 5h14M5 10h10M8 15h4" stroke-linecap="round"/>
+                </svg>
+                Validation Filters
+                <span class="val-trigger-badge" id="valTriggerBadge" style="display:none">0</span>
+              </button>
+              <span class="val-filter-note" id="valFilterNote">No filters</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="run-bar" id="runBar" style="display:none">
+          <div class="run-bar-info">
+            <strong id="runBarTitle">Configure cleaning type above</strong>
+            <span id="runBarSub">Select a dataset type then click Run Pipeline.</span>
+          </div>
+          <button class="btn-primary" id="runPipelineBtn" onclick="runPipeline()" disabled>
+            <svg width="14" height="14" viewBox="0 0 20 20" fill="none"><polygon points="5 3 19 10 5 17 5 3" fill="currentColor"/></svg>
+            Run Pipeline
+          </button>
+        </div>
+
+        <!-- Column Rules Modal -->
+        <div id="recoModal" class="reco-modal-overlay" style="display:none" onclick="onRecoOverlayClick(event)">
+          <div class="reco-modal">
+            <div class="reco-modal-header">
+              <div class="reco-modal-header-left">
+                <p class="reco-modal-title">Column Rule Preview</p>
+                <span class="reco-modal-subtitle">Auto-detected · drag bubbles onto columns to assign</span>
+              </div>
+              <button class="reco-modal-close" onclick="closeRecoModal()">&times;</button>
+            </div>
+            <div class="reco-modal-sticky">
+              <div class="reco-globals" id="recoGlobalsBar">
+                <span class="reco-globals-label">All columns</span>
+                <span class="rule-chip-global active" data-global="trim"
+                      onclick="toggleGlobalRule(this,'trim')" title="Click to toggle">
+                  Trim whitespace
+                </span>
+                <span class="rule-chip-global active" data-global="null"
+                      onclick="toggleGlobalRule(this,'null')" title="Click to toggle">
+                  Null standardise
+                </span>
+                <span class="rule-chip-global active" data-global="special"
+                      onclick="toggleGlobalRule(this,'special')" title="Click to toggle">
+                  Special chars clean
+                </span>
+                <span class="reco-globals-hint">click to toggle · drag palette rule to apply to all columns</span>
+              </div>
+              <div class="reco-palette-section">
+                <p class="reco-pane-label">Rule palette <span class="reco-pane-hint">drag onto a column · drop here to remove</span></p>
+                <div class="reco-palette-list" id="paletteList"></div>
+              </div>
+            </div>
+            <div class="reco-modal-body">
+              <div class="reco-columns-section">
+                <p class="reco-pane-label">Columns <span class="reco-col-count" id="recoColCountLabel"></span></p>
+                <div class="reco-col-list" id="recoColList"></div>
+              </div>
+            </div>
+            <div class="reco-modal-footer">
+              <button class="btn-primary" onclick="closeRecoModal()">Done</button>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </section>
+    <!-- /viewUpload -->
+
+
+    <!-- ══════════════════════════════════════════════════
+         VIEW 02 — CLEAN  (identical to transformer project)
+    ══════════════════════════════════════════════════════ -->
+    <section class="view" id="viewClean">
+
+      <!-- ── Toolbar ──────────────────────────────────── -->
+      <div class="clean-toolbar">
+
+        <!-- Left: manual tools, collapsed into one dropdown to stay uncluttered -->
+        <div class="toolbar-left">
+
+          <div class="tool-dropdown" id="cleanToolsDropdown">
+            <button class="btn-tool" onclick="toggleCleanToolsMenu(event)">
+              <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M4 5h12M4 10h12M4 15h8" stroke-linecap="round"/>
+              </svg>
+              Clean Tools
+              <svg class="tool-dropdown-caret" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M5 8l5 5 5-5" stroke-linecap="round" stroke-linejoin="round"/>
+              </svg>
+            </button>
+
+            <div class="tool-dropdown-menu" id="cleanToolsMenu">
+              <button class="tool-dropdown-item" onclick="closeCleanToolsMenu(); openTrimModal()">
+                <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 6h12M4 10h8M4 14h5" stroke-linecap="round"/></svg>
+                Trim Spaces
+              </button>
+              <button class="tool-dropdown-item" onclick="closeCleanToolsMenu(); openNotNullModal()">
+                <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2"><circle cx="10" cy="10" r="7"/><path d="M6 10h8" stroke-linecap="round"/></svg>
+                Not Null Check
+              </button>
+              <button class="tool-dropdown-item" onclick="closeCleanToolsMenu(); openDateModal()">
+                <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="14" height="13" rx="2"/><path d="M3 8h14M7 2v4M13 2v4" stroke-linecap="round"/></svg>
+                Date Format
+              </button>
+              <button class="tool-dropdown-item" onclick="closeCleanToolsMenu(); openStandardizeModal()">
+                <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 10h10M8 6l-4 4 4 4M12 6l4 4-4 4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                Standardize Values
+              </button>
+              <button class="tool-dropdown-item" onclick="closeCleanToolsMenu(); openTitleCaseModal()">
+                <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 6h12M4 10h8M4 14h5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                Title Case
+              </button>
+              <button class="tool-dropdown-item" onclick="closeCleanToolsMenu(); openRegexModal()">
+                <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 4l4 4-4 4M10 16h6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                Regex Clean
+              </button>
+            </div>
+          </div>
+
+        </div>
+
+        <!-- Right: Issues + Export download buttons -->
+        <div class="toolbar-right">
+
+          <button class="btn-tool" onclick="downloadIssueRows()">
+            <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M10 3v10M5 13l5 5 5-5" stroke-linecap="round" stroke-linejoin="round"/>
+              <path d="M3 17h14" stroke-linecap="round"/>
+            </svg>
+            Issues
+          </button>
+
+          <div class="toolbar-divider"></div>
+
+          <button class="btn-tool btn-tool--accent" onclick="downloadCleanView()">
+            <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M10 3v10M5 13l5 5 5-5" stroke-linecap="round" stroke-linejoin="round"/>
+              <path d="M3 17h14" stroke-linecap="round"/>
+            </svg>
+            Export
+          </button>
+
+        </div>
+      </div>
+      <!-- /toolbar -->
+
+
+      <!-- Hidden selects kept for JS compatibility — not visible -->
+      <select id="cleanProjectSelect" style="display:none" onchange="onCleanProjectChange(this.value)"></select>
+      <select id="cleanIpSelect"      style="display:none" onchange="loadCleanDataset()"></select>
+      <select id="uuidColumnSelectClean" style="display:none" onchange="onUuidColumnChangeClean(this.value)"></select>
+
+      <!-- ── Dataset table ─────────────────────────────── -->
+      <div class="dataset-wrap" id="cleanDatasetWrap" style="display:none">
+        <div class="dataset-scroll">
+          <table class="dataset-table" id="cleanTable">
+            <thead id="cleanTableHead"></thead>
+            <tbody id="cleanTableBody"></tbody>
+          </table>
+        </div>
+
+        <!-- Footer: row info + flag chips + pagination -->
+        <div class="dataset-footer">
+          <div style="display:flex;align-items:center;gap:10px;">
+            <span class="dataset-info" id="cleanDatasetInfo">—</span>
+            <span class="clean-file-badge" id="cleanFileBadge"></span>
+          </div>
+          <div class="flag-summary" id="cleanFlagSummary"></div>
+          <div class="dataset-footer-actions" id="cleanPageBar">
+            <button class="clean-page-btn" id="cleanPrevBtn" onclick="cleanChangePage(-1)">← Prev</button>
+            <span class="clean-page-info" id="cleanPageLabel">Page 1 of 1</span>
+            <button class="clean-page-btn" id="cleanNextBtn" onclick="cleanChangePage(1)">Next →</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- ── Empty state ───────────────────────────────── -->
+      <div class="clean-empty" id="cleanEmpty">
+        <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.2" opacity="0.2">
+          <rect x="3" y="3" width="18" height="18" rx="2"/>
+          <path d="M3 9h18M9 21V9"/>
+        </svg>
+        <p>Run the pipeline to load the cleaned dataset,<br/>
+           or use the tools above to trim, format dates, and standardize values.</p>
+      </div>
+
+    </section>
+    <!-- /viewClean -->
+
+
+    <!-- ══════════════════════════════════════════════════
+         VIEW 03 — VALIDATE
+    ══════════════════════════════════════════════════════ -->
+    <section class="view" id="viewValidate">
+
+      <!-- Header ─────────────────────────────────────────────── -->
+      <div class="validate-header">
+        <div>
+          <h2 class="view-title">Validation Report</h2>
+          <p class="view-desc">Per-row validation results based on your configured filters · select a project and load or run</p>
+        </div>
+        <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+
+          <!-- Project selector -->
+          <label class="uuid-selector" title="Select project">
+            <span>Project</span>
+            <select class="select-input select-input--compact" id="valProjectSelect"
+                    onchange="onValProjectChange(this.value)">
+              <option value="">— select —</option>
+            </select>
+          </label>
+
+          <!-- IP sub-folder (beneficiary / certificates) -->
+          <select class="select-input select-input--compact" id="valIpSelect" style="display:none">
+            <option value="">— IP —</option>
+          </select>
+
+          <!-- Load Results: reads server-side __validation_status__ from last pipeline run -->
+          <button class="btn-primary" onclick="loadValidationResults()"
+                  title="Load validation results already written by the last pipeline run">
+            <svg width="13" height="13" viewBox="0 0 20 20" fill="none"
+                 stroke="currentColor" stroke-width="2">
+              <path d="M10 2l7 3v5c0 4.5-3 7.5-7 9-4-1.5-7-4.5-7-9V5l7-3z"
+                    stroke-linecap="round"/>
+              <path d="M7 10l2 2 4-4" stroke-linecap="round"/>
+            </svg>
+            Load Results
+          </button>
+
+          <!-- Run Filters: evaluates current filter rules client-side and shows
+               a highlighted dataset table identical to the Clean section -->
+          <button class="btn-run-filters" id="valRunFiltersBtn"
+                  onclick="runValidationFilters()"
+                  title="Run the currently configured validation filters against the cleaned dataset and highlight failures">
+            <svg width="13" height="13" viewBox="0 0 20 20" fill="none"
+                 stroke="currentColor" stroke-width="2">
+              <polygon points="5 3 19 10 5 17 5 3" fill="currentColor"/>
+            </svg>
+            Run Filters
+          </button>
+
+        </div>
+      </div>
+
+      <!-- Stats row ───────────────────────────────────────────── -->
+      <div class="stat-row val-stat-row" id="valStatRow" style="display:none">
+        <div class="stat-card">
+          <span class="stat-num" id="valStatTotal">—</span>
+          <span class="stat-lbl">Total Rows</span>
+        </div>
+        <div class="stat-card stat-card--green">
+          <span class="stat-num" id="valStatPassed">—</span>
+          <span class="stat-lbl">Passed</span>
+        </div>
+        <div class="stat-card stat-card--red">
+          <span class="stat-num" id="valStatFailed">—</span>
+          <span class="stat-lbl">Failed</span>
+        </div>
+      </div>
+
+      <!-- Filter breakdown ────────────────────────────────────── -->
+      <div class="val-breakdown-card" id="valBreakdownCard" style="display:none">
+        <p class="val-breakdown-title">Filter Breakdown</p>
+        <div id="valFilterBreakdown"></div>
+      </div>
+
+      <!-- View toggle ─────────────────────────────────────────── -->
+      <div class="val-view-toggle" id="valViewToggle" style="display:none">
+        <button class="val-view-btn active" id="valViewBtnFailed"
+                onclick="switchValView('failed')">
+          Failed Rows
+          <span id="valFailedCount" class="val-count-badge"></span>
+        </button>
+        <button class="val-view-btn" id="valViewBtnAll"
+                onclick="switchValView('all')">
+          Full Dataset
+        </button>
+      </div>
+
+      <!-- ── Failures table (left tab) ───────────────────────── -->
+      <div class="val-table-card" id="valTableCard" style="display:none">
+        <div class="val-table-header">
+          <span class="val-table-title" id="valTableCaption">Failed rows</span>
+          <input class="val-table-search" id="valSearchInput" type="text"
+                 placeholder="Search filter / row…"
+                 oninput="filterValTable(this.value)" />
+        </div>
+        <div class="val-table-scroll">
+          <table class="val-data-table">
+            <thead>
+              <tr>
+                <th style="width:52px">Row</th>
+                <th>Filters Failed</th>
+                <th style="width:80px">Status</th>
+              </tr>
+            </thead>
+            <tbody id="valTableBody"></tbody>
+          </table>
+        </div>
+        <div class="val-pagination" id="valPagination" style="display:none">
+          <button class="val-page-btn" id="valPrevBtn"
+                  onclick="valChangePage(-1)">← Prev</button>
+          <span class="val-page-info" id="valPageInfo">Page 1 of 1</span>
+          <button class="val-page-btn" id="valNextBtn"
+                  onclick="valChangePage(1)">Next →</button>
+        </div>
+      </div>
+
+      <!-- ── Full Dataset table (right tab) ──────────────────────
+           Shared DOM for both modes:
+             • After "Load Results"  → server-side status table (_renderValDataset)
+             • After "Run Filters"   → client-side highlighted table (_showValHighlightTable)
+           main.js decides which renderer fills valDatasetHead / valDatasetBody.
+      ─────────────────────────────────────────────────────────── -->
+      <div class="val-table-card" id="valDatasetCard" style="display:none">
+
+        <!-- Card header: title + flag chips (injected by _showValHighlightTable)
+             + search (used only by the server-side mode)                       -->
+        <div class="val-table-header">
+          <span class="val-table-title" id="valDatasetTitle">
+            Full Dataset — Validation Status per Row
+          </span>
+          <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+            <!-- Download button: shown after client-side run -->
+            <button class="btn-tool" id="valDownloadFailedBtn"
+                    onclick="downloadValFailedRows()"
+                    style="display:none"
+                    title="Export flagged rows as CSV">
+              <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M10 3v10M5 13l5 5 5-5" stroke-linecap="round"
+                      stroke-linejoin="round"/>
+                <path d="M3 17h14" stroke-linecap="round"/>
+              </svg>
+              Failed Rows
+            </button>
+            <!-- Search — used only in server-side status mode -->
+            <input class="val-table-search" id="valDatasetSearch" type="text"
+                   placeholder="Search UUID / status…"
+                   oninput="filterValDataset(this.value)"
+                   style="display:none" />
+          </div>
+        </div>
+
+        <!-- ── Inline filter bar ─────────────────────────────────────────── -->
+        <div class="val-inline-filter" id="valInlineFilter" style="display:none">
+          <div class="vif-row">
+            <!-- Column picker -->
+            <select class="vif-select" id="vifColSelect" onchange="vifOnCondChange()">
+              <option value="">Column…</option>
+            </select>
+
+            <!-- Condition picker -->
+            <select class="vif-select" id="vifCondSelect" onchange="vifOnCondChange()">
+              <option value="">Condition…</option>
+              <optgroup label="Presence">
+                <option value="empty">Is Empty / Null</option>
+                <option value="notempty">Is Not Empty</option>
+                <option value="dup">Is Duplicate</option>
+              </optgroup>
+              <optgroup label="Value">
+                <option value="eq">Equal To</option>
+                <option value="neq">Not Equal To</option>
+                <option value="contains">Contains</option>
+                <option value="ncontains">Does Not Contain</option>
+                <option value="gt">Greater Than</option>
+                <option value="lt">Less Than</option>
+                <option value="gte">≥ Greater or Equal</option>
+                <option value="lte">≤ Less or Equal</option>
+                <option value="btwn">Between (lo,hi)</option>
+              </optgroup>
+              <optgroup label="Date">
+                <option value="date_empty">Date — Empty</option>
+                <option value="date_invalid">Date — Invalid</option>
+                <option value="date_before">Date — Before</option>
+                <option value="date_after">Date — After</option>
+                <option value="date_future">Date — In Future</option>
+                <option value="date_past">Date — In Past</option>
+                <option value="date_year_eq">Date — Year Equals</option>
+              </optgroup>
+              <optgroup label="Cross">
+                <option value="cross">Cross Check (vs column)</option>
+              </optgroup>
+            </select>
+
+            <!-- Value input (text) — shown for eq/neq/contains/gt/lt/gte/lte/btwn -->
+            <input  class="vif-input" id="vifValInput"  type="text"
+                    placeholder="Value…" oninput="vifApply()" style="display:none" />
+
+            <!-- 2nd column picker — shown for cross -->
+            <select class="vif-select" id="vifCol2Select" onchange="vifApply()" style="display:none">
+              <option value="">Reference column…</option>
+            </select>
+
+            <!-- Apply + Clear -->
+            <button class="vif-btn vif-btn--apply" onclick="vifApply()">Apply</button>
+            <button class="vif-btn vif-btn--clear" onclick="vifClear()" title="Clear filter">✕ Clear</button>
+
+            <!-- Live result count -->
+            <span class="vif-count" id="vifCount"></span>
+          </div>
+        </div>
+
+        <!-- Table: thead and tbody are overwritten by whichever renderer runs -->
+        <div class="val-dataset-wrap">
+          <table class="val-dataset-table dataset-table" id="valDatasetTable">
+            <thead id="valDatasetHead">
+              <tr>
+                <th style="width:44px">Row</th>
+                <th>UUID</th>
+                <th>Status</th>
+                <th>Rules Failed</th>
+              </tr>
+            </thead>
+            <tbody id="valDatasetBody"></tbody>
+          </table>
+        </div>
+
+        <!-- Pagination — onclick wired to valHlChangePage for the highlighted
+             table; valDatasetChangePage is used for the server-side mode and
+             main.js will call the right one based on which mode is active.    -->
+        <div class="val-pagination" id="valDatasetPagination" style="display:none">
+          <button class="val-page-btn" id="valDatasetPrevBtn"
+                  onclick="valHlChangePage(-1)">← Prev</button>
+          <span class="val-page-info" id="valDatasetPageInfo">Page 1 of 1</span>
+          <button class="val-page-btn" id="valDatasetNextBtn"
+                  onclick="valHlChangePage(1)">Next →</button>
+        </div>
+
+      </div>
+      <!-- /valDatasetCard -->
+
+      <!-- Empty state ─────────────────────────────────────────── -->
+      <div class="validate-empty" id="valEmpty">
+        <svg width="36" height="36" viewBox="0 0 24 24" fill="none"
+             stroke="currentColor" stroke-width="1.2" opacity=".2">
+          <path d="M12 2l9 4v6c0 5.5-3.8 9.7-9 11-5.2-1.3-9-5.5-9-11V6l9-4z"/>
+        </svg>
+        <p>
+          Select a project, then:<br/>
+          <strong>Load Results</strong> — reads validation flags from the last pipeline run.<br/>
+          <strong>Run Filters</strong> — applies your current filters live and highlights every
+          flagged cell like the Clean section.
+        </p>
+      </div>
+
+    </section>
+    <!-- /viewValidate -->
+
+
+    <!-- ══════════════════════════════════════════════════
+         VIEW 04 — REPORT  (ref project style)
+    ══════════════════════════════════════════════════════ -->
+    <section class="view" id="viewReport">
+
+      <div class="view-header">
+        <div>
+          <h2 class="view-title">Pipeline Report</h2>
+          <p class="view-desc">Combined summary of cleaning and validation — generated automatically after each pipeline run</p>
+        </div>
+        <button class="btn-primary" id="reportDownloadBtn" onclick="downloadReportCleanedFile()" style="display:none">
+          <svg width="13" height="13" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2.2">
+            <path d="M10 3v10M5 13l5 5 5-5" stroke-linecap="round" stroke-linejoin="round"/>
+            <path d="M3 17h14" stroke-linecap="round"/>
+          </svg>
+          Download Report
+        </button>
+        <button class="btn-tool" id="duplicatesDownloadBtn" onclick="downloadDuplicates()" title="Download rows with duplicate UUID or CNIC">
+          <svg width="13" height="13" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2.2">
+            <path d="M10 3v10M5 13l5 5 5-5" stroke-linecap="round" stroke-linejoin="round"/>
+            <path d="M3 17h14" stroke-linecap="round"/>
+          </svg>
+          Download Duplicates
+        </button>
+      </div>
+
+      <!-- Empty state -->
+      <div class="empty-state" id="reportEmpty">
+        <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.2" opacity="0.2">
+          <rect x="3" y="3" width="18" height="18" rx="2"/>
+          <path d="M8 17V12M12 17V7M16 17V14"/>
+        </svg>
+        <p>Run the full pipeline to generate a report</p>
+      </div>
+
+      <!-- Report content -->
+      <div id="reportContent" style="display:none">
+
+        <div class="report-tabs">
+          <button class="report-tab active" data-report-tab="dashboard" onclick="switchReportTab('dashboard')">Dashboard</button>
+          <button class="report-tab" data-report-tab="records"   onclick="switchReportTab('records')">Records</button>
+          <button class="report-tab" data-report-tab="issues"    onclick="switchReportTab('issues')">Issues Analysis</button>
+          <button class="report-tab" data-report-tab="executive" onclick="switchReportTab('executive')">Executive Summary</button>
+        </div>
+
+        <!-- ── Dashboard tab ── -->
+        <div class="report-panel active" id="reportPanelDashboard">
+          <div class="metric-grid four">
+            <div class="metric-card"><p>Data Quality</p><strong id="rQuality">—</strong></div>
+            <div class="metric-card"><p>Total Records</p><strong id="rDashTotalRows">—</strong></div>
+            <div class="metric-card"><p>Cells Auto-Cleaned</p><strong id="rDashCleaned">—</strong></div>
+            <div class="metric-card"><p>Cells Flagged</p><strong id="rDashFlagged">—</strong></div>
+          </div>
+
+          <div class="report-grid">
+            <div class="report-block center-block">
+              <p class="block-heading">Quality Score</p>
+              <div class="score-ring" id="rScoreRing">
+                <span id="rScoreRingValue">—</span>
+                <small>Data Quality<br/>Score</small>
+              </div>
+            </div>
+            <div class="report-block">
+              <p class="block-heading">Cleaning Summary</p>
+              <div class="mini-grid">
+                <div><span>Total Rows</span><strong id="rTotalRows">—</strong></div>
+                <div><span>Rows Cleaned</span><strong id="rRowsCleaned">—</strong></div>
+                <div><span>Cells Auto-Fixed</span><strong id="rCellsCleaned">—</strong></div>
+                <div><span>Cells Flagged</span><strong id="rCellsFlagged">—</strong></div>
+              </div>
+            </div>
+          </div>
+
+          <div class="report-grid">
+            <div class="report-block">
+              <p class="block-heading">Cleaning Step Breakdown</p>
+              <div id="rStepBreakdown" class="issue-dist"></div>
+            </div>
+            <div class="report-block">
+              <p class="block-heading">Validation Summary</p>
+              <div class="mini-grid three" id="rValSummaryGrid">
+                <div><span>Total Rows</span><strong id="rValTotal">—</strong></div>
+                <div><span>Passed</span><strong id="rValPassed" style="color:var(--green)">—</strong></div>
+                <div><span>Failed</span><strong id="rValFailed" style="color:var(--red)">—</strong></div>
+              </div>
+            </div>
+          </div>
+
+          <div class="report-grid">
+            <div class="report-block">
+              <p class="block-heading">Review Required by Column</p>
+              <div id="rReviewByCol" class="quality-breakdown"></div>
+            </div>
+            <div class="report-block">
+              <p class="block-heading">Pipeline Status</p>
+              <div id="rStatusList" class="status-list"></div>
+            </div>
+          </div>
+        </div>
+        <!-- /dashboard -->
+
+        <!-- ── Issues tab ── -->
+        <!-- ── Records tab ── -->
+        <div class="report-panel" id="reportPanelRecords">
+
+          <!-- Filters legend -->
+          <div id="rRecordsFilterLegend" style="display:none;margin-bottom:16px">
+            <p style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--text-4);margin-bottom:8px">Validation Rules Applied</p>
+            <div id="rRecordsFilterList" style="display:flex;flex-wrap:wrap;gap:6px"></div>
+          </div>
+
+          <!-- Search + load controls -->
+          <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px">
+            <input type="text" id="rRecordsSearch" class="mapping-target-input"
+                   placeholder="Search UUID…" oninput="filterReportRecords(this.value)"
+                   style="max-width:220px;font-size:13px"/>
+            <span style="font-size:12px;color:var(--text-4)" id="rRecordsCount"></span>
+          </div>
+
+          <!-- Record cards -->
+          <div id="rRecordsList"></div>
+
+          <!-- Pagination -->
+          <div style="display:flex;align-items:center;justify-content:center;gap:12px;margin-top:16px" id="rRecordsPager" style="display:none">
+            <button class="clean-page-btn" id="rRecordsPrev" onclick="reportRecordsPage(-1)">← Prev</button>
+            <span class="clean-page-info" id="rRecordsPageInfo">Page 1</span>
+            <button class="clean-page-btn" id="rRecordsNext" onclick="reportRecordsPage(1)">Next →</button>
+          </div>
+
+          <div id="rRecordsEmpty" style="text-align:center;padding:40px;color:var(--text-4);display:none">
+            Run the pipeline first to see per-record details.
+          </div>
+        </div>
+        <!-- /records -->
+
+        <div class="report-panel" id="reportPanelIssues">
+          <div class="metric-grid three">
+            <div class="metric-card"><p>Rows Need Review</p><strong id="rIssuesNeedReview">—</strong></div>
+            <div class="metric-card"><p>Duplicate UUIDs</p><strong id="rIssuesDupes">—</strong></div>
+            <div class="metric-card"><p>Cells Flagged</p><strong id="rIssuesCells">—</strong></div>
+          </div>
+
+          <!-- Columns needing review -->
+          <div class="table-card">
+            <div class="table-card-header issues-table-header">
+              <span>Columns Needing Review</span>
+              <small id="rIssuesCaption">—</small>
+            </div>
+            <div class="table-scroll">
+              <table class="data-table">
+                <thead>
+                  <tr><th>Column</th><th>Cells Flagged</th><th>Share</th></tr>
+                </thead>
+                <tbody id="rIssuesTableBody"></tbody>
+              </table>
+            </div>
+          </div>
+
+          <!-- Validation rules applied -->
+          <div class="table-card" id="rValRulesCard" style="display:none">
+            <div class="table-card-header issues-table-header">
+              <span>Validation Rules Applied</span>
+              <small id="rValRulesCaption">—</small>
+            </div>
+            <div class="table-scroll">
+              <table class="data-table">
+                <thead>
+                  <tr>
+                    <th>Rule Label</th>
+                    <th>Condition</th>
+                    <th>Rows Flagged</th>
+                    <th>Status</th>
+                  </tr>
+                </thead>
+                <tbody id="rValRulesBody"></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+        <!-- /issues -->
+
+        <!-- ── Executive tab ── -->
+        <div class="report-panel" id="reportPanelExecutive">
+          <div class="report-block">
+            <p class="block-heading">Executive Summary</p>
+            <p id="rExecutiveText" class="executive-text">—</p>
+          </div>
+          <div class="report-grid">
+            <div class="report-block">
+              <p class="block-heading">Manual Oversight Required</p>
+              <div class="big-number" id="rManualCount">—</div>
+              <p class="muted">Rows with cells that need a data steward's review.</p>
+            </div>
+            <div class="report-block">
+              <p class="block-heading">Export Readiness</p>
+              <div class="big-number" id="rReadiness">—</div>
+              <p class="muted" id="rReadinessNote">—</p>
+            </div>
+          </div>
+        </div>
+        <!-- /executive -->
+
+      </div>
+      <!-- /reportContent -->
+
+    </section>
+    <!-- /viewReport -->
+
+  </main>
+  <!-- /main -->
+
+
+  <!-- ══ VALIDATION FILTERS POPUP ══════════════════════════════ -->
+  <div class="val-popup-overlay" id="valPopupOverlay" onclick="if(event.target===this)closeValPopup()">
+    <div class="val-popup">
+      <div class="val-popup-header">
+        <div>
+          <div class="val-popup-title">Validation Filters</div>
+          <div class="val-popup-sub">Drag filter bubbles onto column cards · saved to project automatically</div>
+        </div>
+        <button class="modal-close" onclick="closeValPopup()">
+          <svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M5 5l10 10M15 5L5 15" stroke-linecap="round"/>
+          </svg>
+        </button>
+      </div>
+      <div class="fp-filters-sticky">
+        <div class="fp-palette-sticky">
+          <div class="fp-category-row">
+            <span class="fp-category-label">Category</span>
+            <div class="fp-category-tabs" id="fpCategoryTabs">
+              <button class="fp-cat-tab active" data-cat="presence">Presence</button>
+              <button class="fp-cat-tab" data-cat="value">Value</button>
+              <button class="fp-cat-tab" data-cat="date">Date</button>
+              <button class="fp-cat-tab" data-cat="cross">Cross-Check</button>
+              <button class="fp-cat-tab" data-cat="logic">Logic</button>
+              <button class="fp-cat-tab" data-cat="compare">Compare</button>
+              <button class="fp-cat-tab" data-cat="geo">Geo</button>
+            </div>
+            <span class="fp-palette-hint">drag onto column · click to add</span>
+          </div>
+          <div class="fp-bubble-strip" id="fpBubbleStrip"></div>
+        </div>
+      </div>
+      <div class="fp-filters-scroll">
+        <div class="fp-col-grid" id="fpColGrid" style="display:none"></div>
+        <div class="fp-general-strip" id="fpGeneralStrip" style="display:none"></div>
+        <div id="tablesContainer" class="fp-rule-store"></div>
+        <input id="sheetSearch" type="text" style="display:none">
+        <div id="sheetDropdown" style="display:none"></div>
+        <span id="sheetMsg" style="display:none"></span>
+        <span id="saveMessage" style="display:none"></span>
+        <span id="selectedSheetLabel" style="display:none"></span>
+        <span id="workingSheetLabel" style="display:none"></span>
+      </div>
+      <div class="fp-popup-footer">
+        <div class="fp-filter-count"><strong id="fpFilterCountNum">0</strong> filters configured</div>
+        <div style="display:flex;gap:10px">
+          <button class="btn-ghost" onclick="clearAllFilters()">Clear all</button>
+          <button class="btn-primary" onclick="closeValPopup()">
+            <svg width="13" height="13" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2.4">
+              <path d="M4 10l4 4 8-9" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+            Done
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+
+  <!-- ══ FILTER CONFIG POPUP ════════════════════════════════════ -->
+  <div class="modal-overlay fp-modal-overlay" id="fpModalOverlay" aria-hidden="true">
+    <div class="modal fp-modal" role="dialog" aria-modal="true">
+      <div class="modal-header">
+        <div>
+          <div class="modal-title" id="fpModalTitle">Configure Filter</div>
+          <div class="modal-sub" id="fpModalSub"></div>
+        </div>
+        <button class="modal-close" id="fpModalClose" title="Cancel" aria-label="Close">
+          <svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M5 5l10 10M15 5L5 15" stroke-linecap="round"/>
+          </svg>
+        </button>
+      </div>
+      <div class="modal-body" id="fpModalBody"></div>
+      <div class="modal-footer">
+        <button class="btn-ghost" id="fpModalCancelBtn" type="button">Cancel</button>
+        <button class="btn-primary" id="fpModalSaveBtn" type="button">
+          <svg width="13" height="13" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2.4">
+            <path d="M4 10l4 4 8-9" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+          Save Filter
+        </button>
+      </div>
+    </div>
+  </div>
+
+
+  <!-- New Project Modal -->
+  <div class="modal-overlay" id="newProjOverlay" style="display:none" onclick="if(event.target===this)closeNewProjModal()">
+    <div class="modal" style="max-width:420px">
+      <div class="modal-header">
+        <div class="modal-title">New Project</div>
+        <button class="modal-close" onclick="closeNewProjModal()">
+          <svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 5l10 10M15 5L5 15" stroke-linecap="round"/></svg>
+        </button>
+      </div>
+      <div class="modal-body" style="display:flex;flex-direction:column;gap:14px">
+        <div>
+          <label style="font-size:12px;font-weight:600;color:var(--text-2);display:block;margin-bottom:6px">Project name</label>
+          <input class="col-combo-input" id="newProjName" type="text" placeholder="e.g. Beneficiary Monitoring Q3…" style="width:100%" />
+        </div>
+        <div>
+          <label style="font-size:12px;font-weight:600;color:var(--text-2);display:block;margin-bottom:6px">Description <span style="font-weight:400;color:var(--text-4)">(optional)</span></label>
+          <input class="col-combo-input" id="newProjDesc" type="text" placeholder="What is this project validating?" style="width:100%" />
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn-ghost" onclick="closeNewProjModal()">Cancel</button>
+        <button class="btn-primary" onclick="createProject()">Create Project</button>
+      </div>
+    </div>
+  </div>
+
+
+  <!-- Progress overlay -->
+  <div class="cp-overlay" id="cpOverlay" style="display:none">
+    <div class="cp-card">
+      <div class="cp-spinner"></div>
+      <p class="cp-title" id="cpTitle">Running pipeline…</p>
+      <div class="cp-steps" id="cpSteps"></div>
+      <p class="cp-note">This may take a moment for large files.</p>
+      <button class="btn-primary cp-done-btn" id="cpDoneBtn" style="display:none">Done</button>
+    </div>
+  </div>
+
+  <!-- Loader (simple) -->
+  <div class="loader-overlay" id="loaderOverlay" style="display:none" aria-hidden="true">
+    <div class="loader-box">
+      <div class="loader-ring"></div>
+      <p class="loader-msg" id="loaderMsg">Loading…</p>
+    </div>
+  </div>
+
+  <div id="toast" class="toast"></div>
+
+
+
+
+  <!-- ══════════════════════════════════════════════════════
+       MODAL — TITLE CASE
+  ══════════════════════════════════════════════════════════ -->
+  <div class="modal-overlay" id="titleCaseModal" style="display:none">
+    <div class="modal">
+      <div class="modal-header">
+        <h3 class="modal-title">Change Case</h3>
+        <button class="modal-close" onclick="closeModal('titleCaseModal')">
+          <svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M5 5l10 10M15 5L5 15" stroke-linecap="round"/>
+          </svg>
+        </button>
+      </div>
+      <div class="modal-body">
+        <p class="modal-desc">Apply UPPER, lower, Title, or camelCase to text columns. Pick one style for everything, or a different style per column.</p>
+        <div class="field-group">
+          <label class="field-label">Apply to</label>
+          <div class="radio-group">
+            <label class="radio-item">
+              <input type="radio" name="titleCaseScope" value="all" checked onchange="toggleTitleCaseColumns(false)"/>
+              <span>All text columns</span>
+            </label>
+            <label class="radio-item">
+              <input type="radio" name="titleCaseScope" value="selected" onchange="toggleTitleCaseColumns(true)"/>
+              <span>Selected columns (choose a style per column)</span>
+            </label>
+          </div>
+        </div>
+        <div class="field-group" id="titleCaseDefaultStyleGroup">
+          <label class="field-label">Case style</label>
+          <select id="titleCaseDefaultStyle" class="select-input">
+            <option value="title" selected>Title Case — "Ali Khan"</option>
+            <option value="upper">UPPER CASE — "ALI KHAN"</option>
+            <option value="lower">lower case — "ali khan"</option>
+            <option value="camel">camelCase — "aliKhan"</option>
+          </select>
+        </div>
+        <div class="field-group" id="titleCaseColsGroup" style="display:none">
+          <label class="field-label">Columns &amp; style</label>
+          <div class="checkbox-scroll" id="titleCaseColsList"></div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn-ghost" onclick="closeModal('titleCaseModal')">Cancel</button>
+        <button class="btn-primary" onclick="applyTitleCase()">Apply</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══════════════════════════════════════════════════════
+       MODAL — AUTO REGEX CLEAN
+  ══════════════════════════════════════════════════════════ -->
+  <div class="modal-overlay" id="regexModal" style="display:none">
+    <div class="modal modal--wide">
+      <div class="modal-header">
+        <h3 class="modal-title">Regex Clean</h3>
+        <button class="modal-close" onclick="closeModal('regexModal')">
+          <svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M5 5l10 10M15 5L5 15" stroke-linecap="round"/>
+          </svg>
+        </button>
+      </div>
+      <div class="modal-body">
+        <p class="modal-desc">
+          Select a column — similar values are grouped into clusters (e.g. "bdin", "badin", "BADin" → "Badin").
+          Edit the target name, remove a value that was grouped wrongly, or drag a value out of the wrong
+          cluster, before applying anything to the dataset.
+        </p>
+
+        <div class="field-group">
+          <label class="field-label">
+            Column
+            <span id="regexChangeCount" style="color:var(--accent);font-family:var(--font-mono);font-size:11px;margin-left:8px"></span>
+          </label>
+          <select class="select-input" id="regexColumnSelect" onchange="regexPreview()">
+            <option value="">— select a column —</option>
+          </select>
+        </div>
+
+        <!-- Cluster preview section -->
+        <div id="regexPreviewSection" style="display:none">
+          <label class="field-label" style="margin-bottom:6px">Suggested groupings — edit before applying</label>
+          <div id="regexClusterList" class="regex-cluster-list"></div>
+        </div>
+
+        <div id="regexPreviewMsg" style="font-size:12px;color:var(--text-4);margin-top:8px"></div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn-ghost" onclick="closeModal('regexModal')">Cancel</button>
+        <button class="btn-primary" id="regexApplyBtn" onclick="applyRegex()" disabled>Apply Changes</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══════════════════════════════════════════════════════
+       MODAL — TRIM SPACES
+  ══════════════════════════════════════════════════════════ -->
+  <div class="modal-overlay" id="trimModal" style="display:none">
+    <div class="modal">
+      <div class="modal-header">
+        <h3 class="modal-title">Trim Whitespace</h3>
+        <button class="modal-close" onclick="closeModal('trimModal')">
+          <svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M5 5l10 10M15 5L5 15" stroke-linecap="round"/>
+          </svg>
+        </button>
+      </div>
+      <div class="modal-body">
+        <p class="modal-desc">Remove leading and trailing spaces from cell values. Apply to all columns or pick specific ones.</p>
+        <div class="field-group">
+          <label class="field-label">Apply to</label>
+          <div class="radio-group">
+            <label class="radio-item">
+              <input type="radio" name="trimScope" value="all" checked onchange="toggleTrimColumns(false)" />
+              <span>All columns</span>
+            </label>
+            <label class="radio-item">
+              <input type="radio" name="trimScope" value="selected" onchange="toggleTrimColumns(true)" />
+              <span>Selected columns only</span>
+            </label>
+          </div>
+        </div>
+        <div class="field-group" id="trimColsGroup" style="display:none">
+          <label class="field-label">Select columns</label>
+          <div class="checkbox-list" id="trimColsList"></div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn-ghost" onclick="closeModal('trimModal')">Cancel</button>
+        <button class="btn-primary" onclick="applyTrim()">Trim Spaces</button>
+      </div>
+    </div>
+  </div>
+
+
+  <!-- ══════════════════════════════════════════════════════
+       MODAL — NOT NULL CHECK
+  ══════════════════════════════════════════════════════════ -->
+  <div class="modal-overlay" id="notNullModal" style="display:none">
+    <div class="modal">
+      <div class="modal-header">
+        <h3 class="modal-title">Not Null Check</h3>
+        <button class="modal-close" onclick="closeModal('notNullModal')">
+          <svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M5 5l10 10M15 5L5 15" stroke-linecap="round"/>
+          </svg>
+        </button>
+      </div>
+      <div class="modal-body">
+        <p class="modal-desc">
+          Flag every cell that's missing or blank, for any column you choose — independent of the
+          Unique / Not Null check used for primary-key columns (UUID/CNIC), which also checks duplicates.
+          This is a plain "must have a value" check only. Flagged cells are marked for review,
+          not auto-filled — there's no safe value to invent for a missing one.
+        </p>
+        <div class="field-group">
+          <label class="field-label">Apply to</label>
+          <div class="radio-group">
+            <label class="radio-item">
+              <input type="radio" name="notNullScope" value="all" checked onchange="toggleNotNullColumns(false)" />
+              <span>All columns</span>
+            </label>
+            <label class="radio-item">
+              <input type="radio" name="notNullScope" value="selected" onchange="toggleNotNullColumns(true)" />
+              <span>Selected columns only</span>
+            </label>
+          </div>
+        </div>
+        <div class="field-group" id="notNullColsGroup" style="display:none">
+          <label class="field-label">Select columns</label>
+          <div class="checkbox-list" id="notNullColsList"></div>
+        </div>
+        <div id="notNullResults" style="display:none"></div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn-ghost" onclick="closeModal('notNullModal')">Close</button>
+        <button class="btn-primary" onclick="applyNotNull()">Run Not Null Check</button>
+      </div>
+    </div>
+  </div>
+
+
+  <!-- ══════════════════════════════════════════════════════
+       MODAL — DATE FORMAT
+  ══════════════════════════════════════════════════════════ -->
+  <div class="modal-overlay" id="dateModal" style="display:none">
+    <div class="modal">
+      <div class="modal-header">
+        <h3 class="modal-title">Standardize Date Format</h3>
+        <button class="modal-close" onclick="closeModal('dateModal')">
+          <svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M5 5l10 10M15 5L5 15" stroke-linecap="round"/>
+          </svg>
+        </button>
+      </div>
+      <div class="modal-body">
+        <p class="modal-desc">Select one or more date columns and choose the output format. The tool auto-detects columns whose names contain "date", "dt", "dob", "doj", "day", or "time".</p>
+        <div class="field-group">
+          <label class="field-label">Date columns</label>
+          <div class="checkbox-list" id="dateColsList"></div>
+        </div>
+        <div class="field-group">
+          <label class="field-label">Output format</label>
+          <div class="format-options">
+            <label class="format-item"><input type="radio" name="dateFormat" value="%d-%m-%Y" checked /><span class="format-label">DD-MM-YYYY</span><span class="format-eg">e.g. 25-01-2024</span></label>
+            <label class="format-item"><input type="radio" name="dateFormat" value="%m-%d-%Y" /><span class="format-label">MM-DD-YYYY</span><span class="format-eg">e.g. 01-25-2024</span></label>
+            <label class="format-item"><input type="radio" name="dateFormat" value="%Y-%m-%d" /><span class="format-label">YYYY-MM-DD</span><span class="format-eg">e.g. 2024-01-25</span></label>
+            <label class="format-item"><input type="radio" name="dateFormat" value="%d/%m/%Y" /><span class="format-label">DD/MM/YYYY</span><span class="format-eg">e.g. 25/01/2024</span></label>
+            <label class="format-item"><input type="radio" name="dateFormat" value="%m/%d/%Y" /><span class="format-label">MM/DD/YYYY</span><span class="format-eg">e.g. 01/25/2024</span></label>
+            <label class="format-item"><input type="radio" name="dateFormat" value="%d %b %Y" /><span class="format-label">DD Mon YYYY</span><span class="format-eg">e.g. 25 Jan 2024</span></label>
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn-ghost" onclick="closeModal('dateModal')">Cancel</button>
+        <button class="btn-primary" onclick="applyDateFormat()">Apply Format</button>
+      </div>
+    </div>
+  </div>
+
+
+  <!-- ══════════════════════════════════════════════════════
+       MODAL — FLAGGED VALUES POPUP (column header + flag bubble clicks)
+  ══════════════════════════════════════════════════════════ -->
+  <div class="modal-overlay" id="reviewPopupModal" style="display:none" onclick="if(event.target===this) closeReviewPopup()">
+    <div class="modal modal--wide">
+      <div class="modal-header">
+        <h3 class="modal-title" id="reviewPopupTitle">Flagged values</h3>
+        <button class="modal-close" onclick="closeReviewPopup()">
+          <svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M5 5l10 10M15 5L5 15" stroke-linecap="round"/>
+          </svg>
+        </button>
+      </div>
+      <div class="modal-body">
+        <p class="modal-desc" id="reviewPopupDesc"></p>
+        <div id="reviewPopupBody"></div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn-ghost" onclick="closeReviewPopup()">Close</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══════════════════════════════════════════════════════
+       MODAL — STANDARDIZE VALUES
+  ══════════════════════════════════════════════════════════ -->
+  <div class="modal-overlay" id="standardizeModal" style="display:none">
+    <div class="modal modal--wide">
+      <div class="modal-header">
+        <h3 class="modal-title">Standardize Values</h3>
+        <button class="modal-close" onclick="closeModal('standardizeModal')">
+          <svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M5 5l10 10M15 5L5 15" stroke-linecap="round"/>
+          </svg>
+        </button>
+      </div>
+      <div class="modal-body">
+        <p class="modal-desc">Map inconsistent values to a single standard form. Works for gender abbreviations, bank names, boolean values, or any categorical column.</p>
+        <div class="field-group">
+          <label class="field-label">Column</label>
+          <select class="select-input" id="stdColumnSelect" onchange="loadUniqueValues()">
+            <option value="">— select a column —</option>
+          </select>
+        </div>
+        <div class="field-group" id="stdValuesGroup" style="display:none">
+          <label class="field-label">Unique values — click to select which to remap</label>
+          <div class="unique-values-grid" id="uniqueValuesGrid"></div>
+        </div>
+        <div class="mapping-section" id="mappingSection" style="display:none">
+          <div class="mapping-bars">
+            <div class="mapping-bar">
+              <p class="mapping-bar-label">Remap these values</p>
+              <div class="mapping-tags" id="mappingSourceTags"></div>
+            </div>
+            <div class="mapping-arrow">
+              <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M4 10h12M12 5l5 5-5 5" stroke-linecap="round" stroke-linejoin="round"/>
+              </svg>
+            </div>
+            <div class="mapping-bar">
+              <p class="mapping-bar-label">Replace with</p>
+              <input type="text" class="mapping-target-input" id="mappingTargetInput" placeholder="Type the standard value…" />
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn-ghost" onclick="closeModal('standardizeModal')">Cancel</button>
+        <button class="btn-primary" onclick="applyStandardize()">Confirm &amp; Apply</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="/static/js/api.js"></script>
+  <script src="/static/js/tables.js"></script>
+  <script src="/static/js/filter-palette.js"></script>
+  <script src="/static/js/filter-collector.js"></script>
+  <script src="/static/js/validation_engine.js"></script>
+  <script src="/static/js/main.js"></script>
+  <script src="/static/js/clean_tools.js"></script>
+  <script src="/static/js/clean_review.js"></script>
+  <script src="/static/js/report.js"></script>
+</body>
+</html>
